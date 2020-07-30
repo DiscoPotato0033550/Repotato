@@ -128,18 +128,34 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		handleError(s, r.ChannelID, err)
 
 		for _, react := range m.Reactions {
-			if strings.ToLower(react.Emoji.APIName()) == strings.TrimSuffix(strings.TrimPrefix(guild.StarEmote, "<:"), ">") && react.Count == guild.MinimumStars {
+			if strings.ToLower(react.Emoji.APIName()) == strings.Trim(guild.StarEmote, "<:>") && react.Count == guild.MinimumStars {
 				t, _ := m.Timestamp.Parse()
+
+				messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", m.GuildID, m.ChannelID, m.ID)
 				embed := &discordgo.MessageEmbed{
 					Author: &discordgo.MessageEmbedAuthor{
 						Name:    fmt.Sprintf("%v in %v", m.Author.String(), ch.Name),
+						URL:     messageURL,
 						IconURL: m.Author.AvatarURL(""),
 					},
-					Description: m.Content,
+					Description: fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", m.Content, messageURL),
 					Timestamp:   t.Format(time.RFC3339),
 					Footer: &discordgo.MessageEmbedFooter{
 						Text: fmt.Sprintf("%v %v", "⭐", guild.MinimumStars),
 					},
+				}
+
+				if len(m.Attachments) != 0 {
+					if utils.ImageURLRegex.MatchString(m.Attachments[0].URL) {
+						embed.Image = &discordgo.MessageEmbedImage{
+							URL: m.Attachments[0].URL,
+						}
+					}
+				} else if str := utils.ImageURLRegex.FindString(m.Content); str != "" {
+					embed.Image = &discordgo.MessageEmbedImage{
+						URL: str,
+					}
+					embed.Description = strings.Replace(embed.Description, str, "", 1)
 				}
 
 				err := database.InsertOneMessage(database.NewMessage(m.GuildID, m.ChannelID, m.ID))
