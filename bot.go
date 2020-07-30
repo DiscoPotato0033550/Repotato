@@ -131,7 +131,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 			if strings.ToLower(react.Emoji.APIName()) == strings.Trim(guild.StarEmote, "<:>") && react.Count == guild.MinimumStars {
 				t, _ := m.Timestamp.Parse()
 
-				messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", m.GuildID, m.ChannelID, m.ID)
+				messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", r.GuildID, m.ChannelID, m.ID)
 				embed := &discordgo.MessageEmbed{
 					Author: &discordgo.MessageEmbedAuthor{
 						Name:    fmt.Sprintf("%v in %v", m.Author.String(), ch.Name),
