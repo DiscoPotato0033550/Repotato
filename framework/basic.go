@@ -218,6 +218,11 @@ func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 		switch setting {
 		case "enabled":
 			passedSetting, err = strconv.ParseBool(newSetting)
+		case "color":
+			passedSetting, err = strconv.Atoi(newSetting)
+			if passedSetting.(int) > 16777215 || passedSetting.(int) < 0 {
+				return errors.New("non-existing decimal color, it should be in range from 0 to 16777215")
+			}
 		case "prefix":
 			if unicode.IsLetter(rune(newSetting[len(newSetting)-1])) {
 				passedSetting = newSetting + " "
@@ -291,7 +296,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 			{
 				Name:  "Settings",
-				Value: fmt.Sprintf("Channel: <#%v> | Emoji: %v | Min stars: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars),
+				Value: fmt.Sprintf("Channel: <#%v> | Emoji: %v | Min stars: %v | Prefix: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix),
 			},
 			{
 				Name:  "Banned channels",

@@ -14,6 +14,7 @@ type Guild struct {
 	ID               string    `json:"guild_id" bson:"guild_id"`
 	Name             string    `json:"name" bson:"name"`
 	StarEmote        string    `json:"emote" bson:"emote"`
+	EmbedColour      int       `json:"color" bson:"color"`
 	Enabled          bool      `json:"enabled" bson:"enabled"`
 	StarboardChannel string    `json:"starboard" bson:"starboard"`
 	MinimumStars     int       `json:"stars" bson:"stars"`
@@ -39,6 +40,7 @@ func NewGuild(guildName, guildID string) *Guild {
 		Name:             guildName,
 		StarEmote:        "⭐",
 		Enabled:          true,
+		EmbedColour:      4431601,
 		StarboardChannel: "",
 		BannedChannels:   make([]string, 0),
 		CreatedAt:        time.Now(),
