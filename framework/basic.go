@@ -288,7 +288,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
 		Title:       "Current settings",
 		Description: guild.Name,
-		Color:       utils.EmbedColor,
+		Color:       settings.EmbedColour,
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Starboard",
