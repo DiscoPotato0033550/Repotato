@@ -124,7 +124,10 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		handleError(s, r.ChannelID, err)
 
 		m, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-		handleError(s, r.ChannelID, err)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
 
 		ch, err := s.Channel(m.ChannelID)
 		handleError(s, r.ChannelID, err)
