@@ -7,6 +7,7 @@ import (
 
 	"github.com/VTGare/Eugen/database"
 	"github.com/VTGare/Eugen/framework"
+	"github.com/VTGare/Eugen/services"
 	"github.com/VTGare/Eugen/utils"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
@@ -116,6 +117,32 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+func emojiURL(emoji *discordgo.Emoji) string {
+	url := fmt.Sprintf("https://cdn.discordapp.com/emojis/%v.", emoji.ID)
+	if emoji.Animated {
+		url += "gif"
+	} else {
+		url += "png"
+	}
+
+	return url
+}
+
+func findTenor(content string) string {
+	tenor := ""
+	if ind := strings.Index(content, "https://tenor.com/view/"); ind != -1 {
+		if ws := strings.IndexAny(content[ind:], " \n"); ws == -1 {
+			tenor = content[ind:]
+		} else {
+			tenor = content[ind : ws+ind]
+		}
+
+		log.Info(tenor)
+	}
+
+	return tenor
+}
+
 func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	guild, ok := database.GuildCache[r.GuildID]
 
@@ -140,6 +167,17 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 			if strings.ToLower(react.Emoji.APIName()) == strings.Trim(guild.StarEmote, "<:>") && react.Count >= guild.MinimumStars {
 				t, _ := m.Timestamp.Parse()
 				messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", r.GuildID, r.ChannelID, m.ID)
+
+				msg := &discordgo.MessageSend{}
+
+				footer := &discordgo.MessageEmbedFooter{}
+				if guild.IsGuildEmoji() {
+					footer.IconURL = emojiURL(react.Emoji)
+					footer.Text = fmt.Sprintf("%v", react.Count)
+				} else {
+					footer.Text = fmt.Sprintf("%v %v", "⭐", react.Count)
+				}
+
 				embed := &discordgo.MessageEmbed{
 					Author: &discordgo.MessageEmbedAuthor{
 						Name:    fmt.Sprintf("%v in %v", m.Author.String(), ch.Name),
@@ -149,9 +187,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 					Color:       guild.EmbedColour,
 					Description: fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", m.Content, messageURL),
 					Timestamp:   t.Format(time.RFC3339),
-					Footer: &discordgo.MessageEmbedFooter{
-						Text: fmt.Sprintf("%v %v", "⭐", react.Count),
-					},
+					Footer:      footer,
 				}
 
 				if len(m.Attachments) != 0 {
@@ -167,9 +203,23 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 					embed.Description = strings.Replace(embed.Description, str, "", 1)
 				}
 
+				if tenor := findTenor(embed.Description); tenor != "" && embed.Image == nil {
+					res, err := services.Tenor(tenor)
+					if err != nil {
+						log.Warn(err)
+					} else if len(res.Media) != 0 {
+						embed.Description = strings.ReplaceAll(embed.Description, tenor, "")
+						media := res.Media[0]
+						embed.Image = &discordgo.MessageEmbedImage{
+							URL: media.MediumGIF.URL,
+						}
+					}
+				}
+
 				if repost == nil {
+					msg.Embed = embed
 					log.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", guild.Name, r.ChannelID, r.MessageID)
-					starboard, err := s.ChannelMessageSendEmbed(guild.StarboardChannel, embed)
+					starboard, err := s.ChannelMessageSendComplex(guild.StarboardChannel, msg)
 					handleError(s, r.ChannelID, err)
 
 					oPair := database.NewPair(m.ChannelID, m.ID)
@@ -224,6 +274,7 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 			}
 
 			for _, react := range m.Reactions {
+
 				if strings.ToLower(react.Emoji.APIName()) == strings.Trim(guild.StarEmote, "<:>") {
 					if react.Count <= guild.MinimumStars/2 {
 						pair := database.NewPair(r.ChannelID, r.MessageID)
@@ -248,6 +299,56 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 				}
 
 				return
+			}
+		}
+	}
+}
+
+func allReactsRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemoveAll) {
+	guild, ok := database.GuildCache[r.GuildID]
+
+	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) {
+		repost, err := database.Repost(r.ChannelID, r.MessageID)
+		if err != nil {
+			log.Warn(err)
+		}
+
+		if repost != nil {
+			log.Infof("Removing starboard (all reactions removed) %v in channel %v", repost.Starboard.MessageID, repost.Starboard.ChannelID)
+			err := s.ChannelMessageDelete(repost.Starboard.ChannelID, repost.Starboard.MessageID)
+			if err != nil {
+				log.Warnln(err)
+			}
+
+			pair := database.NewPair(r.ChannelID, r.MessageID)
+			err = database.DeleteMessage(&pair)
+			if err != nil {
+				log.Warn(err)
+			}
+		}
+	}
+}
+
+func messageDeleted(s *discordgo.Session, m *discordgo.MessageDelete) {
+	guild, ok := database.GuildCache[m.GuildID]
+
+	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(m.ChannelID) {
+		repost, err := database.Repost(m.ChannelID, m.ID)
+		if err != nil {
+			log.Warn(err)
+		}
+
+		if repost != nil {
+			log.Infof("Removing starboard (message deleted) %v in channel %v", repost.Starboard.MessageID, repost.Starboard.ChannelID)
+			err := s.ChannelMessageDelete(repost.Starboard.ChannelID, repost.Starboard.MessageID)
+			if err != nil {
+				log.Warnln(err)
+			}
+
+			pair := database.NewPair(m.ChannelID, m.ID)
+			err = database.DeleteMessage(&pair)
+			if err != nil {
+				log.Warn(err)
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"log"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -30,6 +31,10 @@ func (g *Guild) IsBanned(channelID string) bool {
 		}
 	}
 	return false
+}
+
+func (g *Guild) IsGuildEmoji() bool {
+	return strings.HasPrefix(g.StarEmote, "<:")
 }
 
 func NewGuild(guildName, guildID string) *Guild {
