@@ -168,6 +168,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 				}
 
 				if repost == nil {
+					log.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", guild.Name, r.ChannelID, r.MessageID)
 					starboard, err := s.ChannelMessageSendEmbed(guild.StarboardChannel, embed)
 					handleError(s, r.ChannelID, err)
 
@@ -176,8 +177,11 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 					err = database.InsertOneMessage(database.NewMessage(&oPair, &sPair, r.GuildID))
 					handleError(s, r.ChannelID, err)
 				} else {
+					log.Infof("Editing starboard (adding) %v in channel %v", repost.Starboard.MessageID, repost.Starboard.ChannelID)
 					_, err := s.ChannelMessageEditEmbed(repost.Starboard.ChannelID, repost.Starboard.MessageID, embed)
-					handleError(s, r.ChannelID, err)
+					if err != nil {
+						log.Warnln(err)
+					}
 				}
 
 				return
@@ -191,13 +195,24 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 
 	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) {
 		repost, err := database.Repost(r.ChannelID, r.MessageID)
-		handleError(s, r.ChannelID, err)
+		if err != nil {
+			log.Warn(err)
+		}
 
 		if repost != nil {
+			log.Infof("Editing starboard (subtracting) %v in channel %v", repost.Starboard.MessageID, repost.Starboard.ChannelID)
 			m, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-			handleError(s, r.ChannelID, err)
+			if err != nil {
+				log.Warn(err)
+			}
 			starboard, err := s.ChannelMessage(repost.Starboard.ChannelID, repost.Starboard.MessageID)
-			handleError(s, r.ChannelID, err)
+			if err != nil {
+				log.Warn(err)
+			}
+
+			if m == nil || starboard == nil {
+				return
+			}
 
 			if len(m.Reactions) == 0 {
 				oPair := database.NewPair(r.ChannelID, r.MessageID)
@@ -213,16 +228,22 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 					if react.Count <= guild.MinimumStars/2 {
 						pair := database.NewPair(r.ChannelID, r.MessageID)
 						err := database.DeleteMessage(&pair)
-						handleError(s, r.ChannelID, err)
+						if err != nil {
+							log.Warn(err)
+						}
 
 						err = s.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
-						handleError(s, r.ChannelID, err)
+						if err != nil {
+							log.Warn(err)
+						}
 					} else {
 						embed := starboard.Embeds[0]
 
 						embed.Footer.Text = fmt.Sprintf("%v %v", "⭐", react.Count)
 						_, err := s.ChannelMessageEditEmbed(starboard.ChannelID, starboard.ID, embed)
-						handleError(s, r.ChannelID, err)
+						if err != nil {
+							log.Warn(err)
+						}
 					}
 				}
 
