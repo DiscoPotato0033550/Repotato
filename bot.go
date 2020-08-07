@@ -159,7 +159,6 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 
 		ch, err := s.Channel(m.ChannelID)
 		handleError(s, r.ChannelID, err)
-
 		if m.Content == "" && len(m.Attachments) == 0 {
 			return
 		}
@@ -196,7 +195,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 						embed.Image = &discordgo.MessageEmbedImage{
 							URL: m.Attachments[0].URL,
 						}
-					} else if utils.VideoURLRegex.MatchString(m.Attachments[0].URL) {
+					} else if utils.VideoURLRegex.MatchString(m.Attachments[0].URL) && repost == nil {
 						resp, err := http.Get(m.Attachments[0].URL)
 						if err != nil {
 							handleError(s, m.ChannelID, err)
