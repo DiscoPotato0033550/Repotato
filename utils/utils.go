@@ -15,6 +15,8 @@ import (
 var (
 	//ImageURLRegex is a regex for image URLs
 	ImageURLRegex = regexp.MustCompile(`(?i)(http(s?):)([/|.|\w|\s|-])*\.(?:jpg|jpeg|gif|png|webp)`)
+	//VideoURLRegex ...
+	VideoURLRegex = regexp.MustCompile(`(?i)(http(s?):)([/|.|\w|\s|-])*\.(?:mp4|webm)`)
 	//NumRegex is a terrible number regex. Gonna replace it with better code.
 	NumRegex = regexp.MustCompile(`([0-9]+)`)
 	//EmojiRegex matches some Unicode emojis, it's not perfect but better than nothing
