@@ -61,12 +61,28 @@ func init() {
 
 	banCommand := newCommand("ban", "Bans a channel").setExec(ban).setGuildOnly(true)
 	unbanCommand := newCommand("unban", "Unbans a channel").setExec(unban).setGuildOnly(true)
+	reqCommand := newCommand("req", "Sets per channel star requirement").setExec(req).setGuildOnly(true).setAliases("requirement", "channelstars", "channelset")
+	reqCommand.Help.ExtendedHelp = []*discordgo.MessageEmbedField{
+		{
+			Name:  "Usage",
+			Value: "e!req <channel id or mention> <star requirement>",
+		},
+		{
+			Name:  "Channel ID or mention",
+			Value: "Required. It must be a channel on this server!",
+		},
+		{
+			Name:  "Star requirement",
+			Value: "Required. It must be an integer greater than or equal to 1 or ``default`` to remove a custom star requirement.",
+		},
+	}
 
 	basicGroup.addCommand(pingCommand)
 	basicGroup.addCommand(helpCommand)
 	basicGroup.addCommand(setCommand)
 	basicGroup.addCommand(banCommand)
 	basicGroup.addCommand(unbanCommand)
+	basicGroup.addCommand(reqCommand)
 	CommandGroups["basic"] = basicGroup
 }
 
@@ -198,6 +214,63 @@ func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 	return nil
 }
 
+func req(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	if len(args) < 2 {
+		return utils.ErrNotEnoughArguments
+	}
+	channelID := ""
+
+	channels, err := s.GuildChannels(m.GuildID)
+	if err != nil {
+		return err
+	}
+
+	if strings.HasPrefix(args[0], "<#") {
+		channelID = strings.Trim(args[0], "<#>")
+	}
+
+	if !utils.IsValidChannel(channelID, channels) {
+		return errors.New("you're trying to modify a foreign channel")
+	}
+
+	if args[1] == "default" {
+		g := database.GuildCache[m.GuildID]
+
+		f := false
+		for _, ch := range g.ChannelSettings {
+			if ch.ID == channelID {
+				f = true
+			}
+		}
+
+		if f {
+			err = database.UnsetStarRequirement(m.GuildID, channelID)
+			if err != nil {
+				return err
+			}
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully reset <#%v> settings to defaults", channelID))
+		} else {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Can't reset <#%v> to defaults, channel doesn't have star requirements set.", channelID))
+		}
+	} else {
+		stars, err := strconv.Atoi(args[1])
+		if err != nil {
+			return utils.ErrParsingArgument
+		}
+
+		if stars < 1 {
+			return fmt.Errorf("Star requirement should be >= 1, provided star requirement is %v", stars)
+		}
+
+		err = database.SetStarRequirement(m.GuildID, channelID, stars)
+		if err != nil {
+			return fmt.Errorf("database error\n%v", err)
+		}
+		s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully set <#%v> star requirement to %v", channelID, stars))
+	}
+	return nil
+}
+
 func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	switch len(args) {
 	case 0:
@@ -299,6 +372,10 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 				Value: fmt.Sprintf("Channel: <#%v> | Emoji: %v | Min stars: %v | Prefix: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix),
 			},
 			{
+				Name:  "Unique star requirements",
+				Value: settings.ChannelSettingsToString(),
+			},
+			{
 				Name:  "Banned channels",
 				Value: banned,
 			},
@@ -328,6 +405,6 @@ func changeSetting(guildID, setting string, newSetting interface{}) error {
 		return err
 	}
 
-	database.GuildCache[guildID] = *guild
+	database.GuildCache[guildID] = guild
 	return nil
 }

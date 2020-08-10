@@ -38,7 +38,7 @@ func EmbedTimestamp() string {
 
 func CreateDB(eventGuilds []*discordgo.Guild) error {
 	allGuilds := database.AllGuilds()
-	for _, guild := range *allGuilds {
+	for _, guild := range allGuilds {
 		database.GuildCache[guild.ID] = guild
 	}
 
@@ -48,7 +48,7 @@ func CreateDB(eventGuilds []*discordgo.Guild) error {
 			log.Infoln(guild.ID, "not found in database. Adding...")
 			g := database.NewGuild(guild.Name, guild.ID)
 			newGuilds = append(newGuilds, g)
-			database.GuildCache[g.ID] = *g
+			database.GuildCache[g.ID] = g
 		}
 	}
 
@@ -86,6 +86,15 @@ func MemberHasPermission(s *discordgo.Session, guildID string, userID string, pe
 	}
 
 	return false, nil
+}
+
+func IsValidChannel(id string, channels []*discordgo.Channel) bool {
+	for _, ch := range channels {
+		if ch.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 //FormatBool returns human-readable representation of boolean

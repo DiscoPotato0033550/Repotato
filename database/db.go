@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	GuildCache = make(map[string]Guild)
+	GuildCache = make(map[string]*Guild)
 	//DB is a global mongo database instance.
 	DB *mongo.Database
 	//Client is a global mongo client instance
