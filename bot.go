@@ -248,7 +248,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 				if err != nil {
 					log.Warnln(err)
 				} else {
-					embed := editStarboard(msg, react.Count)
+					embed := editStarboard(msg, guild, react)
 					s.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
 				}
 			}
@@ -256,10 +256,14 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	}
 }
 
-func editStarboard(msg *discordgo.Message, count int) *discordgo.MessageEmbed {
+func editStarboard(msg *discordgo.Message, guild *database.Guild, react *discordgo.MessageReactions) *discordgo.MessageEmbed {
 	embed := msg.Embeds[0]
-	ind := strings.IndexAny(embed.Footer.Text, "1234567890")
-	embed.Footer.Text = strings.Replace(embed.Footer.Text, string(embed.Footer.Text[ind]), strconv.Itoa(count), 1)
+
+	if guild.IsGuildEmoji() {
+		embed.Footer.Text = strconv.Itoa(react.Count)
+	} else {
+		embed.Footer.Text = fmt.Sprintf("⭐ %v", react.Count)
+	}
 
 	return embed
 }
@@ -320,7 +324,7 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 							log.Warn(err)
 						}
 					} else {
-						_, err := s.ChannelMessageEditEmbed(starboard.ChannelID, starboard.ID, editStarboard(starboard, react.Count))
+						_, err = s.ChannelMessageEditEmbed(starboard.ChannelID, starboard.ID, editStarboard(starboard, guild, react))
 						if err != nil {
 							log.Warn(err)
 						}
