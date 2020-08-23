@@ -157,12 +157,6 @@ func allReactsRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemoveAl
 			if err != nil {
 				log.Warnln(err)
 			}
-
-			pair := database.NewPair(r.ChannelID, r.MessageID)
-			err = database.DeleteMessage(&pair)
-			if err != nil {
-				log.Warn(err)
-			}
 		}
 	}
 }

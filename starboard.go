@@ -136,10 +136,6 @@ func (se *StarboardEvent) decrementStarboard() {
 	}
 
 	if len(se.message.Reactions) == 0 {
-		oPair := database.NewPair(se.removeEvent.ChannelID, se.removeEvent.MessageID)
-		err := database.DeleteMessage(&oPair)
-		handleError(se.session, se.removeEvent.ChannelID, err)
-
 		err = se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
 		handleError(se.session, se.removeEvent.ChannelID, err)
 	}
@@ -147,13 +143,7 @@ func (se *StarboardEvent) decrementStarboard() {
 	required := se.guild.StarsRequired(se.removeEvent.ChannelID)
 	if react := se.findReact(); react != nil {
 		if react.Count <= required/2 {
-			pair := database.NewPair(se.removeEvent.ChannelID, se.removeEvent.MessageID)
-			err := database.DeleteMessage(&pair)
-			if err != nil {
-				logrus.Warnln(err)
-			}
-
-			err = se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
+			err := se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
 			if err != nil {
 				logrus.Warnln(err)
 			}
