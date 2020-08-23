@@ -105,6 +105,24 @@ func Repost(channelID, id string) (*Message, error) {
 	return &m, nil
 }
 
+func RepostByStarboard(channelID, id string) (*Message, error) {
+	m, ok := messageCache[NewPair(channelID, id)]
+
+	if !ok {
+		collection := DB.Collection("messages")
+		res := collection.FindOne(context.Background(), bson.D{{"starboard.channel_id", channelID}, {"starboard.message_id", id}})
+		if err := res.Err(); err != nil {
+			if err == mongo.ErrNoDocuments {
+				return nil, nil
+			}
+			return nil, err
+		}
+		res.Decode(&m)
+	}
+
+	return &m, nil
+}
+
 func Starboard(channelID, id string) (*Message, error) {
 	m, ok := messageCache[NewPair(channelID, id)]
 
