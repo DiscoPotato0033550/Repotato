@@ -96,13 +96,18 @@ func (se *StarboardEvent) isStarboarded() bool {
 func (se *StarboardEvent) createStarboard() {
 	required := se.guild.StarsRequired(se.addEvent.ChannelID)
 	if react := se.findReact(); react != nil && react.Count >= required {
-		embed, err := se.createEmbed(react)
+		embed, resp, err := se.createEmbed(react)
 		if err != nil {
 			logrus.Warnln(err)
 		}
 
 		logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
 		starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+
+		if resp != nil {
+			resp.Body.Close()
+		}
+
 		handleError(se.session, se.addEvent.ChannelID, err)
 		oPair := database.NewPair(se.message.ChannelID, se.message.ID)
 		sPair := database.NewPair(starboard.ChannelID, starboard.ID)
@@ -197,7 +202,11 @@ func (se *StarboardEvent) deleteStarboard() error {
 	return nil
 }
 
-func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*discordgo.MessageSend, error) {
+func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*discordgo.MessageSend, *http.Response, error) {
+	var (
+		resp *http.Response
+	)
+
 	t, _ := se.message.Timestamp.Parse()
 	messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", se.addEvent.GuildID, se.addEvent.ChannelID, se.message.ID)
 
@@ -228,11 +237,11 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				URL: se.message.Attachments[0].URL,
 			}
 		} else if utils.VideoURLRegex.MatchString(se.message.Attachments[0].URL) {
-			resp, err := http.Get(se.message.Attachments[0].URL)
+			var err error
+			resp, err = http.Get(se.message.Attachments[0].URL)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			defer resp.Body.Close()
 			lastInd := strings.LastIndex(se.message.Attachments[0].URL, "/")
 			msg.Files = []*discordgo.File{
 				{
@@ -268,7 +277,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 	}
 
 	msg.Embed = embed
-	return msg, nil
+	return msg, resp, nil
 }
 
 func (se *StarboardEvent) findReact() *discordgo.MessageReactions {
