@@ -8,6 +8,7 @@ import (
 	"github.com/VTGare/Eugen/framework"
 	"github.com/VTGare/Eugen/utils"
 	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -117,7 +118,13 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	guild, ok := database.GuildCache[r.GuildID]
-	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) {
+	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+	if err != nil {
+		logrus.Warnln(err)
+		return
+	}
+
+	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
 		se, err := newStarboardEventAdd(s, r)
 		if err != nil {
 			log.Warnln(err)
@@ -130,8 +137,13 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 
 func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 	guild, ok := database.GuildCache[r.GuildID]
+	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+	if err != nil {
+		logrus.Warnln(err)
+		return
+	}
 
-	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) {
+	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
 		se, err := newStarboardEventRemove(s, r)
 		if err != nil {
 			log.Warnln(err)
@@ -144,8 +156,13 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 
 func allReactsRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemoveAll) {
 	guild, ok := database.GuildCache[r.GuildID]
+	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+	if err != nil {
+		logrus.Warnln(err)
+		return
+	}
 
-	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) {
+	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
 		repost, err := database.Repost(r.ChannelID, r.MessageID)
 		if err != nil {
 			log.Warn(err)
