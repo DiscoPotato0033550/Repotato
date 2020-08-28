@@ -45,7 +45,7 @@ func init() {
 				Value: "Starboard functionality switch, accepts ***f or false (case-insensitive)*** to disable and ***t or true*** to enable.",
 			},
 			{
-				Name:  "channel",
+				Name:  "starboard",
 				Value: "Starboard channel. Required for starboard to work. Accepts channel ID or channel mention.",
 			},
 			{
@@ -372,7 +372,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 			{
 				Name:  "Settings",
-				Value: fmt.Sprintf("Channel: <#%v> | Emoji: %v | Min stars: %v | Prefix: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix),
+				Value: fmt.Sprintf("Starboard: <#%v> | Emote: %v | Min stars: %v | Prefix: %v | Color: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix, settings.EmbedColour),
 			},
 			{
 				Name:  "Unique star requirements",
