@@ -295,8 +295,12 @@ func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 		case "enabled":
 			passedSetting, err = strconv.ParseBool(newSetting)
 		case "color":
-			passedSetting, err = strconv.Atoi(newSetting)
-			if passedSetting.(int) > 16777215 || passedSetting.(int) < 0 {
+			if passedSetting, err = strconv.ParseInt(newSetting, 0, 32); err != nil {
+				if passedSetting, err = strconv.ParseInt("0x"+newSetting, 0, 32); err != nil {
+					return fmt.Errorf("unable to parse %v to a number", newSetting)
+				}
+			}
+			if passedSetting.(int64) > 16777215 || passedSetting.(int64) < 0 {
 				return errors.New("non-existing decimal color, it should be in range from 0 to 16777215")
 			}
 		case "prefix":
@@ -364,7 +368,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 	s.ChannelMessageSendEmbed(m.ChannelID, &discordgo.MessageEmbed{
 		Title:       "Current settings",
 		Description: guild.Name,
-		Color:       settings.EmbedColour,
+		Color:       int(settings.EmbedColour),
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Starboard",

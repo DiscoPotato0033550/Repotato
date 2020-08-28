@@ -225,7 +225,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			URL:     messageURL,
 			IconURL: se.message.Author.AvatarURL(""),
 		},
-		Color:       se.guild.EmbedColour,
+		Color:       int(se.guild.EmbedColour),
 		Description: fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", se.message.Content, messageURL),
 		Timestamp:   t.Format(time.RFC3339),
 		Footer:      footer,

@@ -17,7 +17,7 @@ type Guild struct {
 	ID               string             `json:"guild_id" bson:"guild_id"`
 	Name             string             `json:"name" bson:"name"`
 	StarEmote        string             `json:"emote" bson:"emote"`
-	EmbedColour      int                `json:"color" bson:"color"`
+	EmbedColour      int64              `json:"color" bson:"color"`
 	Enabled          bool               `json:"enabled" bson:"enabled"`
 	StarboardChannel string             `json:"starboard" bson:"starboard"`
 	MinimumStars     int                `json:"stars" bson:"stars"`
