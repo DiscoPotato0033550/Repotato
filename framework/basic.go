@@ -77,12 +77,15 @@ func init() {
 		},
 	}
 
+	inviteCmd := newCommand("invite", "Sends an invite link").setExec(invite)
+
 	basicGroup.addCommand(pingCommand)
 	basicGroup.addCommand(helpCommand)
 	basicGroup.addCommand(setCommand)
 	basicGroup.addCommand(banCommand)
 	basicGroup.addCommand(unbanCommand)
 	basicGroup.addCommand(reqCommand)
+	basicGroup.addCommand(inviteCmd)
 	CommandGroups["basic"] = basicGroup
 }
 
@@ -406,5 +409,16 @@ func changeSetting(guildID, setting string, newSetting interface{}) error {
 	}
 
 	database.GuildCache[guildID] = guild
+	return nil
+}
+
+func invite(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	embed := &discordgo.MessageEmbed{
+		Title:       "Thanks for spreading the word!",
+		Description: "Eugen loves you :)\nhttps://discord.com/api/oauth2/authorize?client_id=738399095378673786&permissions=379968&scope=bot",
+		Image:       &discordgo.MessageEmbedImage{URL: s.State.User.AvatarURL("")},
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }

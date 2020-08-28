@@ -267,7 +267,18 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			}
 		}
 	} else if len(se.message.Embeds) != 0 {
-		if img := se.message.Embeds[0].Image; img != nil {
+		emb := se.message.Embeds[0]
+		if strings.EqualFold(emb.Footer.Text, "twitter") {
+			if twitter := utils.TwitterRegex.FindString(se.message.Content); twitter != "" {
+				embed.Description = strings.Replace(embed.Description, twitter, "", 1)
+				embed.Description += fmt.Sprintf("\n```\n%v\n```", emb.Description)
+				embed.Fields = []*discordgo.MessageEmbedField{{Name: "Twitter", Value: fmt.Sprintf("[Click here desu~](%v)", twitter), Inline: true}}
+			}
+			embed.Image = emb.Image
+			if emb.Video != nil {
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Video", Value: fmt.Sprintf("[Click here desu~](%v)", emb.Video.URL), Inline: true})
+			}
+		} else if img := se.message.Embeds[0].Image; img != nil {
 			if img.URL != "" {
 				embed.Image = &discordgo.MessageEmbedImage{
 					URL: se.message.Embeds[0].Image.URL,
