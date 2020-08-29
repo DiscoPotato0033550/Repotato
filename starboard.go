@@ -120,6 +120,14 @@ func (se *StarboardEvent) incrementStarboard() {
 	if react := se.findReact(); react != nil {
 		msg, err := se.session.ChannelMessage(se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 		if err != nil {
+			if strings.Contains(err.Error(), "404 Not Found") {
+				logrus.Infoln("Unknown starboard cached. Removing.")
+				err := database.DeleteMessage(&database.MessagePair{ChannelID: se.message.ChannelID, MessageID: se.message.ID})
+				if err != nil {
+					logrus.Warnln(err)
+				}
+				return
+			}
 			logrus.Warnln(err)
 		} else {
 			logrus.Infoln(fmt.Sprintf("Editing starboard (adding) %v in channel %v", msg.ID, msg.ChannelID))
@@ -130,10 +138,17 @@ func (se *StarboardEvent) incrementStarboard() {
 }
 
 func (se *StarboardEvent) decrementStarboard() {
-	logrus.Infof("Editing starboard (subtracting) %v in channel %v", se.board.Starboard.MessageID, se.board.Starboard.ChannelID)
 	starboard, err := se.session.ChannelMessage(se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 	if err != nil {
-		logrus.Warn(err)
+		if strings.Contains(err.Error(), "404 Not Found") {
+			logrus.Infoln("Unknown starboard cached. Removing.")
+			err := database.DeleteMessage(&database.MessagePair{ChannelID: se.message.ChannelID, MessageID: se.message.ID})
+			if err != nil {
+				logrus.Warnln(err)
+			}
+			return
+		}
+		logrus.Warnln(err)
 	}
 
 	if starboard == nil {
@@ -147,6 +162,7 @@ func (se *StarboardEvent) decrementStarboard() {
 
 	required := se.guild.StarsRequired(se.removeEvent.ChannelID)
 	if react := se.findReact(); react != nil {
+		logrus.Infof("Editing starboard (subtracting) %v in channel %v", se.board.Starboard.MessageID, se.board.Starboard.ChannelID)
 		if react.Count <= required/2 {
 			err := se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
 			if err != nil {
