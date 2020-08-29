@@ -255,6 +255,20 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			URL: str,
 		}
 		embed.Description = strings.Replace(embed.Description, str, "", 1)
+	} else if str := utils.VideoURLRegex.FindString(se.message.Content); str != "" {
+		var err error
+		resp, err = http.Get(str)
+		if err != nil {
+			return nil, nil, err
+		}
+		lastInd := strings.LastIndex(str, "/")
+		msg.Files = []*discordgo.File{
+			{
+				Name:   str[lastInd:],
+				Reader: resp.Body,
+			},
+		}
+		embed.Description = strings.Replace(embed.Description, str, "", 1)
 	} else if tenor := findTenor(embed.Description); tenor != "" {
 		res, err := services.Tenor(tenor)
 		if err != nil {
