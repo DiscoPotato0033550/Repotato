@@ -322,10 +322,6 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 		}
 	}
 
-	if embed.Description == fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", se.message.Content, messageURL) && len(embed.Fields) == 0 && embed.Image == nil && len(msg.Files) == 0 {
-		return nil, resp, nil
-	}
-
 	msg.Embed = embed
 	return msg, resp, nil
 }
