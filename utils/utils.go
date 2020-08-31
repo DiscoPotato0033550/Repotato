@@ -24,7 +24,7 @@ var (
 	//EmojiRegex matches some Unicode emojis, it's not perfect but better than nothing
 	EmojiRegex = regexp.MustCompile(`(\x{00a9}|\x{00ae}|[\x{2000}-\x{3300}]|\x{d83c}[\x{d000}-\x{dfff}]|\x{d83d}[\x{d000}-\x{dfff}]|\x{d83e}[\x{d000}-\x{dfff}])`)
 	//EmbedColor is a default Discord embed color
-	EmbedColor = 0x439ef1
+	EmbedColor = 16744576
 	//ErrNotEnoughArguments is a default error when not enough arguments were given
 	ErrNotEnoughArguments = errors.New("not enough arguments")
 	//ErrParsingArgument is a default error when provided arguments couldn't be parsed

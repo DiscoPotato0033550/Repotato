@@ -97,22 +97,25 @@ func (se *StarboardEvent) createStarboard() {
 	required := se.guild.StarsRequired(se.addEvent.ChannelID)
 	if react := se.findReact(); react != nil && react.Count >= required {
 		embed, resp, err := se.createEmbed(react)
+
 		if err != nil {
 			logrus.Warnln(err)
 		}
 
-		logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
-		starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+		if embed != nil {
+			logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
+			starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
 
-		if resp != nil {
-			resp.Body.Close()
+			if resp != nil {
+				resp.Body.Close()
+			}
+
+			handleError(se.session, se.addEvent.ChannelID, err)
+			oPair := database.NewPair(se.message.ChannelID, se.message.ID)
+			sPair := database.NewPair(starboard.ChannelID, starboard.ID)
+			err = database.InsertOneMessage(database.NewMessage(&oPair, &sPair, se.addEvent.GuildID))
+			handleError(se.session, se.addEvent.ChannelID, err)
 		}
-
-		handleError(se.session, se.addEvent.ChannelID, err)
-		oPair := database.NewPair(se.message.ChannelID, se.message.ID)
-		sPair := database.NewPair(starboard.ChannelID, starboard.ID)
-		err = database.InsertOneMessage(database.NewMessage(&oPair, &sPair, se.addEvent.GuildID))
-		handleError(se.session, se.addEvent.ChannelID, err)
 	}
 }
 
@@ -317,6 +320,10 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				}
 			}
 		}
+	}
+
+	if embed.Description == fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", se.message.Content, messageURL) && len(embed.Fields) == 0 && embed.Image == nil && len(msg.Files) == 0 {
+		return nil, resp, nil
 	}
 
 	msg.Embed = embed

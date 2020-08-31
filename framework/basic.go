@@ -419,8 +419,10 @@ func changeSetting(guildID, setting string, newSetting interface{}) error {
 func invite(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
 	embed := &discordgo.MessageEmbed{
 		Title:       "Thanks for spreading the word!",
-		Description: "Eugen loves you :)\nhttps://discord.com/api/oauth2/authorize?client_id=738399095378673786&permissions=379968&scope=bot",
-		Image:       &discordgo.MessageEmbedImage{URL: s.State.User.AvatarURL("")},
+		Description: "Eugen loves you 💖\nhttps://discord.com/api/oauth2/authorize?client_id=738399095378673786&permissions=379968&scope=bot",
+		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: s.State.User.AvatarURL("")},
+		Color:       utils.EmbedColor,
+		Timestamp:   utils.EmbedTimestamp(),
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
