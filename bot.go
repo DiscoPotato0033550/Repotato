@@ -147,10 +147,10 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 		se, err := newStarboardEventRemove(s, r)
 		if err != nil {
 			log.Warnln(err)
-		} else {
-			p := database.NewPair(r.ChannelID, r.MessageID)
-			starboardQueue.Push(p, se)
+			return
 		}
+		p := database.NewPair(r.ChannelID, r.MessageID)
+		starboardQueue.Push(p, se)
 	}
 }
 
@@ -187,10 +187,10 @@ func messageDeleted(s *discordgo.Session, m *discordgo.MessageDelete) {
 		se, err := newStarboardEventDeleted(s, m)
 		if err != nil {
 			log.Warnln(err)
-		} else {
-			p := database.NewPair(m.ChannelID, m.ID)
-			starboardQueue.Push(p, se)
+			return
 		}
+		p := database.NewPair(m.ChannelID, m.ID)
+		starboardQueue.Push(p, se)
 	}
 }
 

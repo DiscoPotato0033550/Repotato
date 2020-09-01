@@ -199,8 +199,10 @@ func (se *StarboardEvent) deleteStarboard() error {
 		}
 	}
 
-	close(starboardQueue[*se.board.Original])
-	delete(starboardQueue, *se.board.Original)
+	if ch, ok := starboardQueue[*se.board.Original]; ok {
+		close(ch)
+		delete(starboardQueue, *se.board.Original)
+	}
 
 	err := database.DeleteMessage(se.board.Original)
 	if err != nil {
