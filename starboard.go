@@ -178,6 +178,11 @@ func (se *StarboardEvent) decrementStarboard() {
 				logrus.Warnln(err)
 			}
 		}
+	} else {
+		err := se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
+		if err != nil {
+			logrus.Warnln(err)
+		}
 	}
 }
 
@@ -257,7 +262,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			embed.Image = &discordgo.MessageEmbedImage{
 				URL: se.message.Attachments[0].URL,
 			}
-		} else if utils.VideoURLRegex.MatchString(se.message.Attachments[0].URL) {
+		} else {
 			var err error
 			resp, err = http.Get(se.message.Attachments[0].URL)
 			if err != nil {
@@ -271,23 +276,29 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				},
 			}
 		}
-	} else if str := utils.ImageURLRegex.FindString(se.message.Content); str != "" {
-		embed.Image = &discordgo.MessageEmbedImage{
-			URL: str,
-		}
-		embed.Description = strings.Replace(embed.Description, str, "", 1)
 	} else if str := utils.VideoURLRegex.FindString(se.message.Content); str != "" {
 		var err error
-		resp, err = http.Get(str)
+
+		uri := str
+		if strings.HasSuffix(uri, "gifv") {
+			uri = strings.Replace(uri, "gifv", "mp4", 1)
+		}
+
+		resp, err = http.Get(uri)
 		if err != nil {
 			return nil, nil, err
 		}
 		lastInd := strings.LastIndex(str, "/")
 		msg.Files = []*discordgo.File{
 			{
-				Name:   str[lastInd:],
+				Name:   uri[lastInd:],
 				Reader: resp.Body,
 			},
+		}
+		embed.Description = strings.Replace(embed.Description, str, "", 1)
+	} else if str := utils.ImageURLRegex.FindString(se.message.Content); str != "" {
+		embed.Image = &discordgo.MessageEmbedImage{
+			URL: str,
 		}
 		embed.Description = strings.Replace(embed.Description, str, "", 1)
 	} else if tenor := findTenor(embed.Description); tenor != "" {
