@@ -301,7 +301,8 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			IconURL: se.message.Author.AvatarURL(""),
 		},
 		Color:       int(se.guild.EmbedColour),
-		Description: fmt.Sprintf("%v\n\n[Click to jump to message!](%v)", se.message.Content, messageURL),
+		Description: se.message.Content,
+		Fields:      []*discordgo.MessageEmbedField{{Name: "Original message", Value: fmt.Sprintf("[Click here desu~](%v)", messageURL), Inline: true}},
 		Timestamp:   t.Format(time.RFC3339),
 		Footer:      footer,
 	}
@@ -368,13 +369,19 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				if twitter := utils.TwitterRegex.FindString(se.message.Content); twitter != "" {
 					embed.Description = strings.Replace(embed.Description, twitter, "", 1)
 					embed.Description += fmt.Sprintf("\n```\n%v\n```", emb.Description)
-					embed.Fields = []*discordgo.MessageEmbedField{{Name: "Twitter", Value: fmt.Sprintf("[Click here desu~](%v)", twitter), Inline: true}}
+					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Twitter", Value: fmt.Sprintf("[Click here desu~](%v)", twitter), Inline: true})
 				}
 				embed.Image = emb.Image
 				if emb.Video != nil {
 					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Video", Value: fmt.Sprintf("[Click here desu~](%v)", emb.Video.URL), Inline: true})
 				}
 			}
+		} else if emb.Provider != nil && strings.EqualFold(emb.Provider.Name, "youtube") {
+			embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.URL}
+			yt := utils.YoutubeRegex.FindString(embed.Description)
+			embed.Description = strings.ReplaceAll(embed.Description, yt, "")
+			embed.Description += "\n```" + emb.Title + "```"
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "YouTube", Value: fmt.Sprintf("[Click here desu~](%v)", emb.URL), Inline: true})
 		} else if img := se.message.Embeds[0].Image; img != nil {
 			if img.URL != "" {
 				embed.Image = &discordgo.MessageEmbedImage{
