@@ -78,6 +78,7 @@ func (se *StarboardEvent) Run() error {
 	logrus.Infof("Starboard: [%v %v]", se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 
 	if se.deleteEvent != nil {
+		logrus.Infoln("deleteEvent != nil")
 		se.deleteStarboard()
 	} else if se.isStarboarded() {
 		self, err := se.isSelfStar()
@@ -88,6 +89,7 @@ func (se *StarboardEvent) Run() error {
 
 		switch {
 		case se.selfstar && !se.guild.Selfstar:
+			logrus.Infoln("se.selfstar && !se.guild.Selfstar")
 			return nil
 		case se.addEvent != nil:
 			se.incrementStarboard()
