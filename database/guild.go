@@ -20,6 +20,7 @@ type Guild struct {
 	EmbedColour      int64              `json:"color" bson:"color"`
 	Enabled          bool               `json:"enabled" bson:"enabled"`
 	StarboardChannel string             `json:"starboard" bson:"starboard"`
+	Selfstar         bool               `json:"selfstar" bson:"selfstar"`
 	MinimumStars     int                `json:"stars" bson:"stars"`
 	ChannelSettings  []*ChannelSettings `json:"channel_settings" bson:"channel_settings"`
 	BannedChannels   []string           `json:"banned" bson:"banned"`
@@ -78,6 +79,7 @@ func NewGuild(guildName, guildID string) *Guild {
 		Name:             guildName,
 		StarEmote:        "⭐",
 		Enabled:          true,
+		Selfstar:         true,
 		EmbedColour:      4431601,
 		StarboardChannel: "",
 		ChannelSettings:  make([]*ChannelSettings, 0),

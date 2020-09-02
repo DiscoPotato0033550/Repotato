@@ -23,6 +23,7 @@ type StarboardEvent struct {
 	addEvent    *discordgo.MessageReactionAdd
 	removeEvent *discordgo.MessageReactionRemove
 	deleteEvent *discordgo.MessageDelete
+	selfstar    bool
 }
 
 func newStarboardEventAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) (*StarboardEvent, error) {
@@ -76,13 +77,27 @@ func (se *StarboardEvent) Run() error {
 	if se.deleteEvent != nil {
 		se.deleteStarboard()
 	} else if se.isStarboarded() {
+		self, err := se.isSelfStar()
+		if err != nil {
+			return err
+		}
+		se.selfstar = self
+
 		switch {
+		case se.selfstar && !se.guild.Selfstar:
+			return nil
 		case se.addEvent != nil:
 			se.incrementStarboard()
 		case se.removeEvent != nil:
 			se.decrementStarboard()
 		}
 	} else if se.addEvent != nil {
+		self, err := se.isSelfStar()
+		if err != nil {
+			return err
+		}
+		se.selfstar = self
+
 		se.createStarboard()
 	}
 
@@ -93,34 +108,65 @@ func (se *StarboardEvent) isStarboarded() bool {
 	return se.board != nil
 }
 
+func (se *StarboardEvent) isSelfStar() (bool, error) {
+	r := se.findReact()
+	if r == nil {
+		return false, nil
+	}
+
+	users, err := se.session.MessageReactions(se.message.ChannelID, se.message.ID, r.Emoji.APIName(), 100, "", "")
+	if err != nil {
+		return false, fmt.Errorf("MessageReactions(): %v", err)
+	}
+
+	for _, user := range users {
+		if user.ID == se.message.Author.ID {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (se *StarboardEvent) createStarboard() {
 	required := se.guild.StarsRequired(se.addEvent.ChannelID)
-	if react := se.findReact(); react != nil && react.Count >= required {
-		embed, resp, err := se.createEmbed(react)
 
-		if err != nil {
-			logrus.Warnln(err)
+	if react := se.findReact(); react != nil {
+		if se.selfstar && !se.guild.Selfstar {
+			react.Count--
 		}
 
-		if embed != nil {
-			logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
-			starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+		if react.Count >= required {
+			embed, resp, err := se.createEmbed(react)
 
-			if resp != nil {
-				resp.Body.Close()
+			if err != nil {
+				logrus.Warnln(err)
 			}
 
-			handleError(se.session, se.addEvent.ChannelID, err)
-			oPair := database.NewPair(se.message.ChannelID, se.message.ID)
-			sPair := database.NewPair(starboard.ChannelID, starboard.ID)
-			err = database.InsertOneMessage(database.NewMessage(&oPair, &sPair, se.addEvent.GuildID))
-			handleError(se.session, se.addEvent.ChannelID, err)
+			if embed != nil {
+				logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
+				starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+
+				if resp != nil {
+					resp.Body.Close()
+				}
+
+				handleError(se.session, se.addEvent.ChannelID, err)
+				oPair := database.NewPair(se.message.ChannelID, se.message.ID)
+				sPair := database.NewPair(starboard.ChannelID, starboard.ID)
+				err = database.InsertOneMessage(database.NewMessage(&oPair, &sPair, se.addEvent.GuildID))
+				handleError(se.session, se.addEvent.ChannelID, err)
+			}
 		}
 	}
 }
 
 func (se *StarboardEvent) incrementStarboard() {
 	if react := se.findReact(); react != nil {
+		if se.selfstar && !se.guild.Selfstar {
+			react.Count--
+		}
+
 		msg, err := se.session.ChannelMessage(se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 		if err != nil {
 			if strings.Contains(err.Error(), "404 Not Found") {
@@ -134,7 +180,7 @@ func (se *StarboardEvent) incrementStarboard() {
 			logrus.Warnln(err)
 		} else {
 			logrus.Infoln(fmt.Sprintf("Editing starboard (adding) %v in channel %v", msg.ID, msg.ChannelID))
-			embed := editStarboard(msg, se.guild, react)
+			embed := se.editStarboard(msg, react)
 			se.session.ChannelMessageEditEmbed(msg.ChannelID, msg.ID, embed)
 		}
 	}
@@ -158,13 +204,12 @@ func (se *StarboardEvent) decrementStarboard() {
 		return
 	}
 
-	if len(se.message.Reactions) == 0 {
-		err = se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
-		handleError(se.session, se.removeEvent.ChannelID, err)
-	}
-
 	required := se.guild.StarsRequired(se.removeEvent.ChannelID)
 	if react := se.findReact(); react != nil {
+		if se.selfstar && !se.guild.Selfstar {
+			react.Count--
+		}
+
 		logrus.Infof("Editing starboard (subtracting) %v in channel %v", se.board.Starboard.MessageID, se.board.Starboard.ChannelID)
 		if react.Count <= required/2 {
 			err := se.session.ChannelMessageDelete(starboard.ChannelID, starboard.ID)
@@ -172,7 +217,7 @@ func (se *StarboardEvent) decrementStarboard() {
 				logrus.Warnln(err)
 			}
 		} else {
-			embed := editStarboard(starboard, se.guild, react)
+			embed := se.editStarboard(starboard, react)
 			_, err := se.session.ChannelMessageEditEmbed(starboard.ChannelID, starboard.ID, embed)
 			if err != nil {
 				logrus.Warnln(err)
@@ -243,6 +288,10 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 		footer.Text = fmt.Sprintf("%v", react.Count)
 	} else {
 		footer.Text = fmt.Sprintf("%v %v", "⭐", react.Count)
+	}
+
+	if se.selfstar && se.guild.Selfstar {
+		footer.Text += " | self-starred"
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -374,13 +423,17 @@ func findTenor(content string) string {
 	return tenor
 }
 
-func editStarboard(msg *discordgo.Message, guild *database.Guild, react *discordgo.MessageReactions) *discordgo.MessageEmbed {
+func (se *StarboardEvent) editStarboard(msg *discordgo.Message, react *discordgo.MessageReactions) *discordgo.MessageEmbed {
 	embed := msg.Embeds[0]
 
-	if guild.IsGuildEmoji() {
+	if se.guild.IsGuildEmoji() {
 		embed.Footer.Text = strconv.Itoa(react.Count)
 	} else {
 		embed.Footer.Text = fmt.Sprintf("⭐ %v", react.Count)
+	}
+
+	if se.selfstar && se.guild.Selfstar {
+		embed.Footer.Text += " | self-starred"
 	}
 
 	return embed

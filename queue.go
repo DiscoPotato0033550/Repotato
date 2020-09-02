@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/VTGare/Eugen/database"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -21,7 +22,10 @@ func (q Queue) Push(pair database.MessagePair, event *StarboardEvent) {
 		q[pair] = make(chan *StarboardEvent)
 		go func() {
 			for e := range q[pair] {
-				e.Run()
+				err := e.Run()
+				if err != nil {
+					logrus.Warnln(err)
+				}
 			}
 		}()
 

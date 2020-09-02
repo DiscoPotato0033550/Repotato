@@ -294,6 +294,8 @@ func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 		switch setting {
 		case "enabled":
 			passedSetting, err = strconv.ParseBool(newSetting)
+		case "selfstar":
+			passedSetting, err = strconv.ParseBool(newSetting)
 		case "color":
 			if passedSetting, err = strconv.ParseInt(newSetting, 0, 32); err != nil {
 				if passedSetting, err = strconv.ParseInt("0x"+newSetting, 0, 32); err != nil {
@@ -376,7 +378,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 			{
 				Name:  "Settings",
-				Value: fmt.Sprintf("Starboard: <#%v> | Emote: %v | Min stars: %v | Prefix: %v | Color: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix, settings.EmbedColour),
+				Value: fmt.Sprintf("Starboard: <#%v> | Emote: %v | Min stars: %v | Prefix: %v | Color: %v | Selfstar: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix, settings.EmbedColour, utils.FormatBool(settings.Selfstar)),
 			},
 			{
 				Name:  "Unique star requirements",
