@@ -16,6 +16,7 @@ func newQueue() Queue {
 }
 
 func (q Queue) Push(pair database.MessagePair, event *StarboardEvent) {
+	logrus.Infoln("Push(): invoked")
 	if ch, ok := q[pair]; ok {
 		ch <- event
 	} else {

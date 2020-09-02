@@ -69,10 +69,13 @@ func newStarboardEventDeleted(s *discordgo.Session, d *discordgo.MessageDelete) 
 
 func (se *StarboardEvent) Run() error {
 	var err error
+	logrus.Infoln("Run(): invoked")
+
 	se.board, err = database.Repost(se.channel.ID, se.message.ID)
 	if err != nil {
 		return err
 	}
+	logrus.Infof("Starboard: [%v %v]", se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 
 	if se.deleteEvent != nil {
 		se.deleteStarboard()

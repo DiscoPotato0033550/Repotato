@@ -129,10 +129,10 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		se, err := newStarboardEventAdd(s, r)
 		if err != nil {
 			log.Warnln(err)
-		} else {
-			p := database.NewPair(r.ChannelID, r.MessageID)
-			starboardQueue.Push(p, se)
+			return
 		}
+		p := database.NewPair(r.ChannelID, r.MessageID)
+		starboardQueue.Push(p, se)
 	}
 }
 
