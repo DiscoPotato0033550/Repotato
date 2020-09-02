@@ -125,6 +125,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	}
 
 	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
+		logrus.Infoln("Creating a new starboard event.")
 		se, err := newStarboardEventAdd(s, r)
 		if err != nil {
 			log.Warnln(err)
@@ -144,6 +145,7 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 	}
 
 	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
+		logrus.Infoln("Creating a new starboard event.")
 		se, err := newStarboardEventRemove(s, r)
 		if err != nil {
 			log.Warnln(err)

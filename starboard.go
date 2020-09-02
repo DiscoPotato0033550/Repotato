@@ -201,6 +201,7 @@ func (se *StarboardEvent) decrementStarboard() {
 	}
 
 	if starboard == nil {
+		logrus.Warnln("decrementStarboard(): nil starboard")
 		return
 	}
 
