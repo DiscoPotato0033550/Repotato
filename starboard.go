@@ -69,16 +69,13 @@ func newStarboardEventDeleted(s *discordgo.Session, d *discordgo.MessageDelete) 
 
 func (se *StarboardEvent) Run() error {
 	var err error
-	logrus.Infoln("Run(): invoked")
 
 	se.board, err = database.Repost(se.channel.ID, se.message.ID)
 	if err != nil {
 		return err
 	}
-	logrus.Infof("Starboard: [%v %v]", se.board.Starboard.ChannelID, se.board.Starboard.MessageID)
 
 	if se.deleteEvent != nil {
-		logrus.Infoln("deleteEvent != nil")
 		se.deleteStarboard()
 	} else if se.isStarboarded() {
 		self, err := se.isSelfStar()
@@ -88,9 +85,6 @@ func (se *StarboardEvent) Run() error {
 		se.selfstar = self
 
 		switch {
-		case se.selfstar && !se.guild.Selfstar:
-			logrus.Infoln("se.selfstar && !se.guild.Selfstar")
-			return nil
 		case se.addEvent != nil:
 			se.incrementStarboard()
 		case se.removeEvent != nil:
