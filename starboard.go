@@ -26,6 +26,12 @@ type StarboardEvent struct {
 	selfstar    bool
 }
 
+type StarboardFile struct {
+	Name string
+	URL  string
+	Resp *http.Response
+}
+
 func newStarboardEventAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) (*StarboardEvent, error) {
 	guild := database.GuildCache[r.GuildID]
 	message, err := s.ChannelMessage(r.ChannelID, r.MessageID)
@@ -313,37 +319,44 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				URL: se.message.Attachments[0].URL,
 			}
 		} else {
-			var err error
-			resp, err = http.Get(se.message.Attachments[0].URL)
+			video, err := se.downloadFile(se.message.Attachments[0].URL)
 			if err != nil {
 				return nil, nil, err
 			}
-			lastInd := strings.LastIndex(se.message.Attachments[0].URL, "/")
-			msg.Files = []*discordgo.File{
-				{
-					Name:   se.message.Attachments[0].URL[lastInd:],
-					Reader: resp.Body,
-				},
+
+			if video.Resp != nil {
+				resp = video.Resp
+				msg.Files = []*discordgo.File{
+					{
+						Name:   video.Name,
+						Reader: video.Resp.Body,
+					},
+				}
+			} else {
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", se.message.Attachments[0].URL)})
 			}
 		}
 	} else if str := utils.VideoURLRegex.FindString(se.message.Content); str != "" {
-		var err error
-
 		uri := str
 		if strings.HasSuffix(uri, "gifv") {
 			uri = strings.Replace(uri, "gifv", "mp4", 1)
 		}
 
-		resp, err = http.Get(uri)
+		video, err := se.downloadFile(uri)
 		if err != nil {
 			return nil, nil, err
 		}
-		lastInd := strings.LastIndex(str, "/")
-		msg.Files = []*discordgo.File{
-			{
-				Name:   uri[lastInd:],
-				Reader: resp.Body,
-			},
+
+		if video.Resp != nil {
+			resp = video.Resp
+			msg.Files = []*discordgo.File{
+				{
+					Name:   video.Name,
+					Reader: video.Resp.Body,
+				},
+			}
+		} else {
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", uri)})
 		}
 		embed.Description = strings.Replace(embed.Description, str, "", 1)
 	} else if str := utils.ImageURLRegex.FindString(se.message.Content); str != "" {
@@ -444,4 +457,42 @@ func (se *StarboardEvent) editStarboard(msg *discordgo.Message, react *discordgo
 	}
 
 	return embed
+}
+
+func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
+	var (
+		file  = &StarboardFile{"", "", nil}
+		limit = int64(8388608)
+	)
+
+	head, err := http.Head(uri)
+	if err != nil {
+		return nil, err
+	}
+
+	g, err := se.session.Guild(se.message.GuildID)
+	if err == nil {
+		switch {
+		case g.PremiumSubscriptionCount >= 15 && g.PremiumSubscriptionCount < 30:
+			limit = int64(52428800)
+		case g.PremiumSubscriptionCount >= 30:
+			limit = int64(104857600)
+		}
+	}
+
+	//if Content-Length is larger than 8 MB
+	if head.ContentLength >= limit {
+		file.URL = uri
+		return file, nil
+	}
+
+	resp, err := http.Get(uri)
+	if err != nil {
+		return nil, err
+	}
+	lastInd := strings.LastIndex(uri, "/")
+	file.Name = uri[lastInd:]
+	file.Resp = resp
+
+	return file, nil
 }
