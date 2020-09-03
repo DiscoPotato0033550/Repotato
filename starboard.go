@@ -333,7 +333,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 					},
 				}
 			} else {
-				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", se.message.Attachments[0].URL)})
+				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", se.message.Attachments[0].URL), Inline: true})
 			}
 		}
 	} else if str := utils.VideoURLRegex.FindString(se.message.Content); str != "" {
@@ -356,7 +356,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				},
 			}
 		} else {
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", uri)})
+			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", uri), Inline: true})
 		}
 		embed.Description = strings.Replace(embed.Description, str, "", 1)
 	} else if str := utils.ImageURLRegex.FindString(se.message.Content); str != "" {
