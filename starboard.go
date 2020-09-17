@@ -151,6 +151,11 @@ func (se *StarboardEvent) createStarboard() {
 			if embed != nil {
 				logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
 				starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+				if err != nil {
+					logrus.Warnln("Error sending a message: ", err)
+					se.session.ChannelMessageSend(se.message.ChannelID, fmt.Sprintf("Error creating a starboard message: %v", err))
+					return
+				}
 
 				if resp != nil {
 					resp.Body.Close()
@@ -417,32 +422,6 @@ func (se *StarboardEvent) findReact() *discordgo.MessageReactions {
 	return nil
 }
 
-func emojiURL(emoji *discordgo.Emoji) string {
-	url := fmt.Sprintf("https://cdn.discordapp.com/emojis/%v.", emoji.ID)
-	if emoji.Animated {
-		url += "gif"
-	} else {
-		url += "png"
-	}
-
-	return url
-}
-
-func findTenor(content string) string {
-	tenor := ""
-	if ind := strings.Index(content, "https://tenor.com/view/"); ind != -1 {
-		if ws := strings.IndexAny(content[ind:], " \n"); ws == -1 {
-			tenor = content[ind:]
-		} else {
-			tenor = content[ind : ws+ind]
-		}
-
-		logrus.Info(tenor)
-	}
-
-	return tenor
-}
-
 func (se *StarboardEvent) editStarboard(msg *discordgo.Message, react *discordgo.MessageReactions) *discordgo.MessageEmbed {
 	embed := msg.Embeds[0]
 
@@ -480,7 +459,7 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 		}
 	}
 
-	//if Content-Length is larger than 8 MB
+	//if Content-Length is larger than 8MB | 50MB | 100MB depending on boost level
 	if head.ContentLength >= limit {
 		file.URL = uri
 		return file, nil
@@ -495,4 +474,30 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 	file.Resp = resp
 
 	return file, nil
+}
+
+func emojiURL(emoji *discordgo.Emoji) string {
+	url := fmt.Sprintf("https://cdn.discordapp.com/emojis/%v.", emoji.ID)
+	if emoji.Animated {
+		url += "gif"
+	} else {
+		url += "png"
+	}
+
+	return url
+}
+
+func findTenor(content string) string {
+	tenor := ""
+	if ind := strings.Index(content, "https://tenor.com/view/"); ind != -1 {
+		if ws := strings.IndexAny(content[ind:], " \n"); ws == -1 {
+			tenor = content[ind:]
+		} else {
+			tenor = content[ind : ws+ind]
+		}
+
+		logrus.Info(tenor)
+	}
+
+	return tenor
 }
