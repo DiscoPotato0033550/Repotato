@@ -638,7 +638,7 @@ func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 			}
 
 			if res == "default" {
-				colour = 4431601
+				colour = 16744576
 			}
 
 			if res == "previous" {
