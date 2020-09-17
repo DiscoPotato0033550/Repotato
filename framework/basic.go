@@ -26,7 +26,7 @@ func init() {
 		IsVisible:   true,
 	}
 
-	pingCommand := newCommand("ping", "Checks if Boe Tea is online and sends response time back.")
+	pingCommand := newCommand("ping", "Checks if bot is online and sends a responce time.")
 	pingCommand.setExec(ping)
 	helpCommand := newCommand("help", "Sends this message. Use ``{prefix}help <group name> <command name>`` for more info about specific commands. ``{prefix}help <group>`` to list commands in a group.")
 	helpCommand.setExec(help)
@@ -93,7 +93,11 @@ func init() {
 }
 
 func ping(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf(":ping_pong: Pong! Latency: ***%v***", s.HeartbeatLatency().Round(1*time.Millisecond)))
+	embed := utils.BaseEmbed(s)
+	embed.Title = "🏓 Pong!"
+	embed.Fields = []*discordgo.MessageEmbedField{{"Heartbeat latency", fmt.Sprintf("%v", s.HeartbeatLatency().Round(1*time.Millisecond)), true}}
+
+	_, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	if err != nil {
 		return err
 	}
