@@ -118,6 +118,16 @@ func InsertOneGuild(guild *Guild) error {
 	return nil
 }
 
+func ReplaceGuild(guild *Guild) error {
+	collection := DB.Collection("guilds")
+	res := collection.FindOneAndReplace(context.Background(), bson.M{"guild_id": guild.ID}, guild)
+	if err := res.Err(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 //InsertManyGuilds insert a bulk of guilds to a database
 func InsertManyGuilds(guilds []interface{}) error {
 	collection := DB.Collection("guilds")

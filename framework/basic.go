@@ -12,6 +12,7 @@ import (
 	"github.com/VTGare/Eugen/database"
 	"github.com/VTGare/Eugen/utils"
 	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
@@ -27,14 +28,14 @@ func init() {
 
 	pingCommand := newCommand("ping", "Checks if Boe Tea is online and sends response time back.")
 	pingCommand.setExec(ping)
-	helpCommand := newCommand("help", "Sends this message. Use ``bt!help <group name> <command name>`` for more info about specific commands. ``bt!help <group>`` to list commands in a group.")
+	helpCommand := newCommand("help", "Sends this message. Use ``{prefix}help <group name> <command name>`` for more info about specific commands. ``{prefix}help <group>`` to list commands in a group.")
 	helpCommand.setExec(help)
 	setCommand := newCommand("set", "Show server's settings or change them.").setExec(set).setAliases("settings", "config", "cfg").setHelp(&HelpSettings{
 		IsVisible: true,
 		ExtendedHelp: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Usage",
-				Value: "e!set ``<setting>`` ``<new setting>``",
+				Value: "{prefix}set ``<setting>`` ``<new setting>``",
 			},
 			{
 				Name:  "prefix",
@@ -78,6 +79,7 @@ func init() {
 	}
 
 	inviteCmd := newCommand("invite", "Sends an invite link").setExec(invite)
+	setupCommand := newCommand("setup", "Starts an interactive Eugen setup process.").setExec(setup).setGuildOnly(true)
 
 	basicGroup.addCommand(pingCommand)
 	basicGroup.addCommand(helpCommand)
@@ -86,6 +88,7 @@ func init() {
 	basicGroup.addCommand(unbanCommand)
 	basicGroup.addCommand(reqCommand)
 	basicGroup.addCommand(inviteCmd)
+	basicGroup.addCommand(setupCommand)
 	CommandGroups["basic"] = basicGroup
 }
 
@@ -98,8 +101,10 @@ func ping(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error
 }
 
 func help(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	guild := database.GuildCache[m.GuildID]
+
 	embed := &discordgo.MessageEmbed{
-		Description: "Use ``e!help <group name> <command name>`` for extended help on specific commands.",
+		Description: fmt.Sprintf("Use ``%vhelp <command name>`` for extended help on specific commands.", guild.Prefix),
 		Color:       utils.EmbedColor,
 		Timestamp:   utils.EmbedTimestamp(),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
@@ -112,49 +117,38 @@ func help(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error
 		embed.Title = "Help"
 		for _, group := range CommandGroups {
 			if group.IsVisible {
-				field := &discordgo.MessageEmbedField{
-					Name:  group.Name,
-					Value: group.Description,
+				unique := make(map[string]bool)
+				for _, command := range group.Commands {
+					if _, ok := unique[command.Name]; !ok {
+						field := &discordgo.MessageEmbedField{
+							Name:  command.Name,
+							Value: command.createHelp(guild.Prefix),
+						}
+
+						unique[command.Name] = true
+						embed.Fields = append(embed.Fields, field)
+					}
 				}
-				embed.Fields = append(embed.Fields, field)
 			}
 		}
 	case 1:
-		if group, ok := CommandGroups[args[0]]; ok {
-			embed.Title = fmt.Sprintf("%v group command list", args[0])
-
-			used := map[string]bool{}
-			for _, command := range group.Commands {
-				_, ok := used[command.Name]
-				if command.Help.IsVisible && !ok {
-					field := &discordgo.MessageEmbedField{
-						Name:  command.Name,
-						Value: command.createHelp(),
-					}
-					used[command.Name] = true
-					embed.Fields = append(embed.Fields, field)
-				}
-			}
-		} else {
-			return fmt.Errorf("unknown group %v", args[0])
-		}
-	case 2:
-		if group, ok := CommandGroups[args[0]]; ok {
-			if command, ok := group.Commands[args[1]]; ok {
-				if command.Help.IsVisible && command.Help.ExtendedHelp != nil {
+		found := false
+		for _, group := range CommandGroups {
+			if command, ok := group.Commands[args[0]]; ok {
+				if len(command.Help.ExtendedHelp) > 0 && command.Help.IsVisible {
+					found = true
 					embed.Title = fmt.Sprintf("%v command extended help", command.Name)
-					embed.Fields = command.Help.ExtendedHelp
-				} else {
-					return fmt.Errorf("command %v is invisible or doesn't have extended help", args[0])
+					embed.Fields = command.createExtendedHelp(guild.Prefix)
 				}
-			} else {
-				return fmt.Errorf("unknown command %v", args[1])
 			}
-		} else {
-			return fmt.Errorf("unknown group %v", args[0])
+		}
+
+		if !found {
+			s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Command %v either doesn't have extended help info or doesn't exist.", args[0]))
+			return nil
 		}
 	default:
-		return errors.New("incorrect command usage. Example: bt!help <group> <command name>")
+		return errors.New("incorrect command usage. Example: bt!help <command name>")
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
@@ -425,6 +419,281 @@ func invite(s *discordgo.Session, m *discordgo.MessageCreate, args []string) err
 		Thumbnail:   &discordgo.MessageEmbedThumbnail{URL: s.State.User.AvatarURL("")},
 		Color:       utils.EmbedColor,
 		Timestamp:   utils.EmbedTimestamp(),
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
+	return nil
+}
+
+func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have permission to run this command.")
+	}
+
+	var (
+		guild     = database.GuildCache[m.GuildID]
+		step      = 0
+		done      bool
+		exit      bool
+		starboard string
+		selfstar  bool
+		minstars  int
+		emote     string
+		colour    int64
+	)
+
+	verifyChannel := func(chID string) bool {
+		if !strings.HasPrefix(chID, "<#") || !strings.HasSuffix(chID, ">") {
+			return false
+		}
+
+		chID = strings.Trim(chID, "<#>")
+		ch, err := s.Channel(chID)
+		if err != nil {
+			logrus.Warnln(err)
+			return false
+		}
+
+		if ch.GuildID != m.GuildID {
+			return false
+		}
+
+		return true
+	}
+
+	verifyColour := func(colour string) (int64, bool) {
+		var c int64
+		var err error
+
+		if c, err = strconv.ParseInt(colour, 0, 32); err != nil {
+			if c, err = strconv.ParseInt("0x"+colour, 0, 32); err != nil {
+				return 0, false
+			}
+		}
+		if c > 16777215 || c < 0 {
+			return 0, false
+		}
+
+		return c, true
+	}
+
+	steps := []func() (bool, error){
+		func() (bool, error) {
+			embed := utils.BaseEmbed(s)
+			embed.Title = "Eugen Setup | Step 1: Starboard channel"
+
+			var sb strings.Builder
+			sb.WriteString("To complete this step **mention a starboard channel.**\n\nType ``cancel`` or ``exit`` to quit the setup.")
+			embed.Description = sb.String()
+
+			res := ""
+			flag := false
+			for !(flag || res == "cancel" || res == "exit") {
+				res = utils.CreatePrompt(s, m, embed)
+				flag = verifyChannel(res)
+			}
+
+			if res == "cancel" || res == "exit" {
+				return false, nil
+			}
+
+			starboard = res
+			step++
+
+			return true, nil
+		},
+		func() (bool, error) {
+			embed := utils.BaseEmbed(s)
+			embed.Title = "Eugen Setup | Step 2: Minimum stars"
+			var sb strings.Builder
+			sb.WriteString("**Current settings:**\n")
+			sb.WriteString(fmt.Sprintf("Starboard channel: %v\n", starboard))
+			sb.WriteString("\nTo complete this step **type an integer number**.\n")
+			sb.WriteString("\nType ``cancel`` or ``exit`` to cancel the setup.\nType ``previous`` to come back to a previous step")
+			embed.Description = sb.String()
+
+			res := ""
+			flag := false
+			for !(flag || res == "cancel" || res == "exit" || res == "previous") {
+				res = utils.CreatePrompt(s, m, embed)
+				num, err := strconv.Atoi(res)
+				if err == nil {
+					flag = true
+					minstars = num
+				}
+			}
+
+			if res == "cancel" || res == "exit" {
+				return false, nil
+			}
+
+			if res == "previous" {
+				step--
+				return true, nil
+			}
+
+			step++
+			return true, nil
+		},
+		func() (bool, error) {
+			embed := utils.BaseEmbed(s)
+			embed.Title = "Eugen Setup | Step 3: Star emote"
+			var sb strings.Builder
+			sb.WriteString("**Current settings:**\n")
+			sb.WriteString(fmt.Sprintf("Starboard channel: %v\n", starboard))
+			sb.WriteString(fmt.Sprintf("Minimum stars: %v\n", minstars))
+			sb.WriteString("\nTo complete this step **send a guild emote or type default.**\n")
+			sb.WriteString("\nType ``cancel`` or ``exit`` to cancel the setup.\nType ``previous`` to come back to a previous step")
+			embed.Description = sb.String()
+
+			res := ""
+			flag := false
+			for !(flag || res == "cancel" || res == "exit" || res == "previous" || res == "default") {
+				res = utils.CreatePrompt(s, m, embed)
+				e, err := utils.GetEmoji(s, m.GuildID, res)
+				if err == nil {
+					flag = true
+					emote = e
+				}
+			}
+
+			if res == "cancel" || res == "exit" {
+				return false, nil
+			}
+
+			if res == "default" {
+				emote = "⭐"
+			}
+
+			if res == "previous" {
+				step--
+				return true, nil
+			}
+
+			step++
+			return true, nil
+		},
+		func() (bool, error) {
+			embed := utils.BaseEmbed(s)
+			embed.Title = "Eugen Setup | Step 4: Selfstar"
+			var sb strings.Builder
+			sb.WriteString("**Current settings:**\n")
+			sb.WriteString(fmt.Sprintf("Starboard channel: %v\n", starboard))
+			sb.WriteString(fmt.Sprintf("Minimum stars: %v\n", minstars))
+			sb.WriteString(fmt.Sprintf("Emote: %v\n", emote))
+			sb.WriteString("\nTo complete this step **type ``true`` to allow self-starring or ``false`` to not count self-stars.**\n")
+			sb.WriteString("\nType ``cancel`` or ``exit`` to cancel the setup.\nType ``previous`` to come back to a previous step")
+			embed.Description = sb.String()
+
+			res := ""
+			for !(res == "true" || res == "false" || res == "cancel" || res == "exit" || res == "previous") {
+				res = utils.CreatePrompt(s, m, embed)
+			}
+
+			if res == "cancel" || res == "exit" {
+				return false, nil
+			}
+
+			if res == "true" {
+				selfstar = true
+			} else if res == "false" {
+				selfstar = false
+			}
+
+			if res == "previous" {
+				step--
+				return true, nil
+			}
+
+			step++
+			return true, nil
+		},
+		func() (bool, error) {
+			embed := utils.BaseEmbed(s)
+			embed.Title = "Eugen Setup | Step 5: Embed colour"
+			var sb strings.Builder
+			sb.WriteString("**Current settings:**\n")
+			sb.WriteString(fmt.Sprintf("Starboard channel: %v\n", starboard))
+			sb.WriteString(fmt.Sprintf("Minimum stars: %v\n", minstars))
+			sb.WriteString(fmt.Sprintf("Emote: %v\n", emote))
+			sb.WriteString(fmt.Sprintf("Self-star: %v\n", utils.FormatBool(selfstar)))
+			sb.WriteString("\nTo complete this step **send a hexadecimal colour or integer up to 16777215 or default.**\n")
+			sb.WriteString("\nType ``cancel`` or ``exit`` to cancel the setup.\nType ``previous`` to come back to a previous step")
+			embed.Description = sb.String()
+
+			res := ""
+			flag := false
+			for !(flag || res == "true" || res == "false" || res == "cancel" || res == "exit" || res == "previous" || res == "default") {
+				res = utils.CreatePrompt(s, m, embed)
+				colour, flag = verifyColour(res)
+			}
+
+			if res == "cancel" || res == "exit" {
+				return false, nil
+			}
+
+			if res == "default" {
+				colour = 4431601
+			}
+
+			if res == "previous" {
+				step--
+				return true, nil
+			}
+
+			done = true
+			return true, nil
+		},
+	}
+
+	for !done {
+		success, err := steps[step]()
+		if err != nil {
+			return err
+		}
+		if !success {
+			exit = true
+			done = true
+		}
+	}
+
+	guild.Enabled = true
+	guild.StarboardChannel = starboard
+	guild.MinimumStars = minstars
+	guild.StarEmote = emote
+	guild.Selfstar = selfstar
+	guild.EmbedColour = colour
+	guild.UpdatedAt = time.Now()
+
+	err = database.ReplaceGuild(guild)
+	if err != nil {
+		logrus.Warnf("ReplaceGuild(): %v", err)
+	}
+
+	embed := utils.BaseEmbed(s)
+	if !exit && err == nil {
+		embed.Title = "✅ Successfully setup Eugen!"
+		embed.Fields = []*discordgo.MessageEmbedField{
+			{Name: "Starboard channel", Value: starboard},
+			{Name: "Minimum stars", Value: fmt.Sprintf("%v", minstars)},
+			{Name: "Emote", Value: emote},
+			{Name: "Self-star", Value: utils.FormatBool(selfstar)},
+			{Name: "Embed colour", Value: "applied to this embed :)"}}
+		embed.Color = int(colour)
+	} else {
+		reason := ""
+		if exit {
+			reason = "User manually cancelled setup."
+		} else {
+			reason = "Error occured while setting up. Please contact bot creator at VTGare#3370"
+		}
+		embed.Title = "❎ Failed to setup Eugen."
+		embed.Fields = []*discordgo.MessageEmbedField{{"Reason", reason, false}}
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)

@@ -132,3 +132,45 @@ func Map(vs []string, f func(string) string) []string {
 	}
 	return vsm
 }
+
+func BaseEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
+	return &discordgo.MessageEmbed{
+		Thumbnail: &discordgo.MessageEmbedThumbnail{URL: s.State.User.AvatarURL("")},
+		Color:     EmbedColor,
+		Timestamp: EmbedTimestamp(),
+	}
+}
+
+func CreatePrompt(s *discordgo.Session, m *discordgo.MessageCreate, embed *discordgo.MessageEmbed) string {
+	prompt, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
+	if err != nil {
+		log.Warnln(err)
+		return ""
+	}
+
+	var msg *discordgo.MessageCreate
+	for {
+		select {
+		case m := <-nextMessageCreate(s):
+			msg = m
+		case <-time.After(2 * time.Minute):
+			s.ChannelMessageDelete(prompt.ChannelID, prompt.ID)
+			return ""
+		}
+
+		if msg.Author.ID != m.Author.ID {
+			continue
+		}
+
+		s.ChannelMessageDelete(prompt.ChannelID, prompt.ID)
+		return msg.Content
+	}
+}
+
+func nextMessageCreate(s *discordgo.Session) chan *discordgo.MessageCreate {
+	out := make(chan *discordgo.MessageCreate)
+	s.AddHandlerOnce(func(_ *discordgo.Session, e *discordgo.MessageCreate) {
+		out <- e
+	})
+	return out
+}

@@ -92,12 +92,21 @@ func (c *Command) setHelp(help *HelpSettings) *Command {
 	return c
 }
 
-func (c *Command) createHelp() string {
+func (c *Command) createHelp(prefix string) string {
 	str := ""
 	if len(c.Aliases) != 0 {
 		str += fmt.Sprintf("**Aliases:** %v\n", strings.Join(c.Aliases, ", "))
 	}
-	str += c.Description
+	str += strings.ReplaceAll(c.Description, "{prefix}", prefix)
 
 	return str
+}
+
+func (c *Command) createExtendedHelp(prefix string) []*discordgo.MessageEmbedField {
+	n := make([]*discordgo.MessageEmbedField, 0)
+	for _, h := range c.Help.ExtendedHelp {
+		n = append(n, &discordgo.MessageEmbedField{h.Name, strings.ReplaceAll(h.Value, "{prefix}", prefix), false})
+	}
+
+	return n
 }
