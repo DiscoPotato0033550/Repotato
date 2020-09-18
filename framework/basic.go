@@ -666,17 +666,18 @@ func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 		}
 	}
 
-	guild.Enabled = true
-	guild.StarboardChannel = starboard
-	guild.MinimumStars = minstars
-	guild.StarEmote = emote
-	guild.Selfstar = selfstar
-	guild.EmbedColour = colour
-	guild.UpdatedAt = time.Now()
-
-	err = database.ReplaceGuild(guild)
-	if err != nil {
-		logrus.Warnf("ReplaceGuild(): %v", err)
+	if !exit {
+		guild.Enabled = true
+		guild.StarboardChannel = strings.Trim(starboard, "<#>")
+		guild.MinimumStars = minstars
+		guild.StarEmote = emote
+		guild.Selfstar = selfstar
+		guild.EmbedColour = colour
+		guild.UpdatedAt = time.Now()
+		err = database.ReplaceGuild(guild)
+		if err != nil {
+			logrus.Warnf("ReplaceGuild(): %v", err)
+		}
 	}
 
 	embed := utils.BaseEmbed(s)
