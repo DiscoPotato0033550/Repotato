@@ -178,10 +178,17 @@ func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 		if strings.HasPrefix(arg, "<#") {
 			arg = strings.Trim(arg, "<#>")
 		}
+
 		ch, err := s.Channel(arg)
 		if err != nil {
-			return err
+			switch {
+			case strings.Contains(err.Error(), "403"):
+				return fmt.Errorf("Unable to get channel: <#%v>. Not enough permissions.", arg)
+			default:
+				return err
+			}
 		}
+
 		if ch.GuildID == m.GuildID {
 			if !guild.IsBanned(ch.ID) {
 				err := database.BanChannel(ch.GuildID, ch.ID)
@@ -217,7 +224,12 @@ func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 		}
 		ch, err := s.Channel(arg)
 		if err != nil {
-			return err
+			switch {
+			case strings.Contains(err.Error(), "403"):
+				return fmt.Errorf("Unable to get channel: <#%v>. Not enough permissions.", arg)
+			default:
+				return err
+			}
 		}
 		if ch.GuildID == m.GuildID {
 			if guild.IsBanned(ch.ID) {
@@ -258,7 +270,7 @@ func req(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 	}
 
 	if !utils.IsValidChannel(channelID, channels) {
-		return errors.New("you're trying to modify a foreign channel")
+		return fmt.Errorf("Unable to get channel <#%v>. Please make sure Eugen has permissions to see the channel.")
 	}
 
 	if args[1] == "default" {

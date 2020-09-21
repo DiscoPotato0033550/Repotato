@@ -449,14 +449,13 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 		return nil, err
 	}
 
-	g, err := se.session.Guild(se.message.GuildID)
+	g, err := se.session.Guild(se.addEvent.GuildID)
 	if err == nil {
-		switch {
-		case g.PremiumSubscriptionCount >= 15 && g.PremiumSubscriptionCount < 30:
+		if g.PremiumTier != discordgo.PremiumTierNone {
 			limit = int64(52428800)
-		case g.PremiumSubscriptionCount >= 30:
-			limit = int64(104857600)
 		}
+	} else {
+		logrus.Warnf("downloadFile(): %v", err)
 	}
 
 	//if Content-Length is larger than 8MB | 50MB | 100MB depending on boost level
