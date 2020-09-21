@@ -160,6 +160,15 @@ func help(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error
 }
 
 func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have enough permissions to run this command.")
+	}
+
 	if len(args) == 0 {
 		return utils.ErrNotEnoughArguments
 	}
@@ -188,6 +197,15 @@ func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 }
 
 func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have enough permissions to run this command.")
+	}
+
 	if len(args) == 0 {
 		return utils.ErrNotEnoughArguments
 	}
@@ -216,6 +234,15 @@ func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 }
 
 func req(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have enough permissions to run this command.")
+	}
+
 	if len(args) < 2 {
 		return utils.ErrNotEnoughArguments
 	}
