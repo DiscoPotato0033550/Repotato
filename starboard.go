@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,10 @@ import (
 	"github.com/VTGare/Eugen/utils"
 	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
+)
+
+var (
+	imgurRegex = regexp.MustCompile(`(?i)https?:\/\/imgur\.com\/(\w+)`)
 )
 
 type StarboardEvent struct {
@@ -341,7 +346,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", se.message.Attachments[0].URL), Inline: true})
 			}
 		}
-	} else if str := utils.VideoURLRegex.FindString(se.message.Content); str != "" {
+	} else if str := utils.VideoURLRegex.FindString(embed.Description); str != "" {
 		uri := str
 		if strings.HasSuffix(uri, "gifv") {
 			uri = strings.Replace(uri, "gifv", "mp4", 1)
@@ -364,7 +369,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", uri), Inline: true})
 		}
 		embed.Description = strings.Replace(embed.Description, str, "", 1)
-	} else if str := utils.ImageURLRegex.FindString(se.message.Content); str != "" {
+	} else if str := utils.ImageURLRegex.FindString(embed.Description); str != "" {
 		embed.Image = &discordgo.MessageEmbedImage{
 			URL: str,
 		}
@@ -380,6 +385,9 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 				URL: media.MediumGIF.URL,
 			}
 		}
+	} else if imgur := imgurRegex.FindStringSubmatch(embed.Description); imgur != nil {
+		embed.Image = &discordgo.MessageEmbedImage{URL: fmt.Sprintf("https://i.imgur.com/%v.png", imgur[1])}
+		embed.Description = strings.Replace(embed.Description, imgur[0], "", 1)
 	} else if len(se.message.Embeds) != 0 {
 		emb := se.message.Embeds[0]
 		if emb.Footer != nil {
@@ -468,8 +476,14 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	lastInd := strings.LastIndex(uri, "/")
-	file.Name = uri[lastInd:]
+	begin := strings.LastIndex(uri, "/")
+	end := strings.LastIndex(uri, "?")
+	if end != -1 && end > begin {
+		file.Name = uri[begin:end]
+	} else {
+		file.Name = uri[begin:]
+	}
+
 	file.Resp = resp
 
 	return file, nil

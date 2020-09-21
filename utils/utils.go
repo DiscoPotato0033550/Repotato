@@ -16,9 +16,9 @@ var (
 	//TwitterRegex ...
 	TwitterRegex = regexp.MustCompile(`https?://(?:mobile.)?twitter.com/(\S+)/status/(\d+)(?:\?s=\d\d)?`)
 	//ImageURLRegex is a regex for image URLs
-	ImageURLRegex = regexp.MustCompile(`(?i)(http(s?):)([/|.|\w|\s|-])*\.(?:jpg|jpeg|gif|png|webp)`)
+	ImageURLRegex = regexp.MustCompile(`(?i)(http(s?):)([/|.|\w|\s|-])*\.(?:jpg|jpeg|gif|png|webp)(?:(?:\?|&)\w+=\w+)*`)
 	//VideoURLRegex ...
-	VideoURLRegex = regexp.MustCompile(`(?i)(http(s?):)([/|.|\w|\s|-])*\.(?:mp4|webm|mov|gifv)`)
+	VideoURLRegex = regexp.MustCompile(`(?i)(?:http(?:s?):)(?:[/|.|\w|\s|-])*\.(mp4|webm|mov|gifv)(?:(?:\?|&)\w+=\w+)*`)
 	//YoutubeRegex ...
 	YoutubeRegex = regexp.MustCompile(`(?i)https?:\/\/(?:www\.)?youtu(?:be)?\.(?:com|be)\/(?:watch\?v=)?\S+`)
 	//NumRegex is a terrible number regex. Gonna replace it with better code.
