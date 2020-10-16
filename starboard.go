@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	imgurRegex = regexp.MustCompile(`(?i)https?:\/\/imgur\.com\/(\w+)`)
+	imgurRegex = regexp.MustCompile(`(?i)https?:\/\/imgur\.com\/(\w+)(?:\/(\w+))?`)
 )
 
 type StarboardEvent struct {
@@ -386,7 +386,32 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions) (*disco
 			}
 		}
 	} else if imgur := imgurRegex.FindStringSubmatch(embed.Description); imgur != nil {
-		embed.Image = &discordgo.MessageEmbedImage{URL: fmt.Sprintf("https://i.imgur.com/%v.png", imgur[1])}
+		if len(se.message.Embeds) != 0 {
+			emb := se.message.Embeds[0]
+			if emb.Video != nil {
+				file, err := se.downloadFile(emb.Video.URL)
+				if err != nil {
+					logrus.Warnln("se.dowloadFile():", err)
+				}
+
+				if file.Resp != nil {
+					resp = file.Resp
+					msg.Files = []*discordgo.File{
+						{
+							Name:   file.Name,
+							Reader: file.Resp.Body,
+						},
+					}
+				} else if emb.Thumbnail != nil {
+					embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.ProxyURL}
+				}
+			} else if emb.Thumbnail != nil {
+				embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.ProxyURL}
+			}
+		} else {
+			embed.Image = &discordgo.MessageEmbedImage{URL: fmt.Sprintf("https://i.imgur.com/%v.png", imgur[1])}
+		}
+
 		embed.Description = strings.Replace(embed.Description, imgur[0], "", 1)
 	} else if len(se.message.Embeds) != 0 {
 		emb := se.message.Embeds[0]

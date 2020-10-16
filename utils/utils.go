@@ -158,7 +158,7 @@ func CreatePrompt(s *discordgo.Session, m *discordgo.MessageCreate, embed *disco
 	var msg *discordgo.MessageCreate
 	for {
 		select {
-		case m := <-nextMessageCreate(s):
+		case m := <-nextMessageCreate(s, m.ChannelID):
 			msg = m
 		case <-time.After(2 * time.Minute):
 			s.ChannelMessageDelete(prompt.ChannelID, prompt.ID)
@@ -174,10 +174,11 @@ func CreatePrompt(s *discordgo.Session, m *discordgo.MessageCreate, embed *disco
 	}
 }
 
-func nextMessageCreate(s *discordgo.Session) chan *discordgo.MessageCreate {
+func nextMessageCreate(s *discordgo.Session, channelID string) chan *discordgo.MessageCreate {
 	out := make(chan *discordgo.MessageCreate)
 	s.AddHandlerOnce(func(_ *discordgo.Session, e *discordgo.MessageCreate) {
 		out <- e
 	})
+
 	return out
 }
