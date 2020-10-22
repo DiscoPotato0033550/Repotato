@@ -51,10 +51,41 @@ func (g *Guild) ChannelSettingsToString() string {
 		return "none"
 	}
 
-	sb.WriteString(fmt.Sprintf("<#%v>: %v", g.ChannelSettings[0].ID, g.ChannelSettings[0].StarRequirement))
+	sb.WriteString(fmt.Sprintf("<#%v>``%v``: %v ", g.ChannelSettings[0].ID, g.ChannelSettings[0].ID, g.ChannelSettings[0].StarRequirement))
+	inRow := 1
 	if len(g.ChannelSettings) > 1 {
 		for _, ch := range g.ChannelSettings[1:] {
-			sb.WriteString(fmt.Sprintf(" | <#%v>: %v", ch.ID, ch.StarRequirement))
+			if inRow == 2 {
+				sb.WriteString(fmt.Sprintf("\n<#%v>``%v``: %v ", ch.ID, ch.ID, ch.StarRequirement))
+				inRow = 0
+			} else {
+				sb.WriteString(fmt.Sprintf("| <#%v>``%v``: %v ", ch.ID, ch.ID, ch.StarRequirement))
+			}
+			inRow++
+		}
+	}
+
+	return sb.String()
+}
+
+func (g *Guild) BannedChannelsToString() string {
+	var sb strings.Builder
+	if len(g.BannedChannels) == 0 {
+		return "none"
+	}
+
+	sb.WriteString(fmt.Sprintf("<#%v>``%v`` ", g.BannedChannels[0], g.BannedChannels[0]))
+	inRow := 1
+
+	if len(g.BannedChannels) > 1 {
+		for _, ch := range g.BannedChannels[1:] {
+			if inRow == 2 {
+				sb.WriteString(fmt.Sprintf("\n<#%v>``%v`` ", ch, ch))
+				inRow = 0
+			} else {
+				sb.WriteString(fmt.Sprintf("| <#%v>``%v``", ch, ch))
+			}
+			inRow++
 		}
 	}
 

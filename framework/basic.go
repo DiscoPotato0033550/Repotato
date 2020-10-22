@@ -64,7 +64,7 @@ func init() {
 	unbanCommand := newCommand("unban", "Unbans a channel").setExec(unban).setGuildOnly(true)
 
 	blacklistCommand := newCommand("blacklist", "Blacklists a user").setExec(blacklist).setGuildOnly(true)
-	unblacklistCommand := newCommand("unban", "Unblacklists a user").setExec(unblacklist).setGuildOnly(true)
+	unblacklistCommand := newCommand("unblacklist", "Unblacklists a user").setExec(unblacklist).setGuildOnly(true)
 
 	reqCommand := newCommand("req", "Sets per channel star requirement").setExec(req).setGuildOnly(true).setAliases("requirement", "channelstars", "channelset")
 	reqCommand.Help.ExtendedHelp = []*discordgo.MessageEmbedField{
@@ -180,6 +180,8 @@ func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 	}
 
 	guild := database.GuildCache[m.GuildID]
+
+	banned := make([]string, 0)
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "<#") {
 			arg = strings.Trim(arg, "<#>")
@@ -201,11 +203,17 @@ func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 				if err != nil {
 					return err
 				}
+
+				banned = append(banned, fmt.Sprintf("<#%v>", ch.ID))
 			}
 		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully banned following channels: %v", args))
+	embed := utils.BaseEmbed(s)
+	embed.Title = "✅ Successfully banned channels"
+	embed.Description = fmt.Sprintf("List of banned channels:\n%v", banned)
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }
 
@@ -224,30 +232,37 @@ func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 	}
 
 	guild := database.GuildCache[m.GuildID]
+	unbanned := make([]string, 0)
 	for _, arg := range args {
-		if strings.HasPrefix(arg, "<#") {
-			arg = strings.Trim(arg, "<#>")
+		arg = strings.Trim(arg, "<#>")
+
+		exists := false
+		for _, ch := range guild.BannedChannels {
+			if arg == ch {
+				exists = true
+			}
 		}
-		ch, err := s.Channel(arg)
-		if err != nil {
-			switch {
-			case strings.Contains(err.Error(), "403"):
-				return fmt.Errorf("Unable to get channel: <#%v>. Not enough permissions.", arg)
-			default:
+
+		if exists {
+			err = database.UnbanChannel(guild.ID, arg)
+			if err != nil {
 				return err
 			}
-		}
-		if ch.GuildID == m.GuildID {
-			if guild.IsBanned(ch.ID) {
-				err := database.UnbanChannel(ch.GuildID, ch.ID)
-				if err != nil {
-					return err
-				}
-			}
+
+			unbanned = append(unbanned, fmt.Sprintf("<#%v>", arg))
 		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully unbanned following channels: %v", args))
+	embed := utils.BaseEmbed(s)
+	if len(unbanned) > 0 {
+		embed.Title = "✅ Successfully unbanned channels"
+		embed.Description = fmt.Sprintf("List of unbanned channels:\n%v", unbanned)
+	} else {
+		embed.Title = "❎ Failed to unban channels"
+		embed.Description = fmt.Sprintf("No channels were unbanned")
+	}
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }
 
@@ -266,26 +281,28 @@ func blacklist(s *discordgo.Session, m *discordgo.MessageCreate, args []string) 
 	}
 
 	guild := database.GuildCache[m.GuildID]
+	blacklisted := make([]string, 0)
 	for _, arg := range args {
 		arg = strings.Trim(arg, "<@!>")
 
-		member, err := s.GuildMember(guild.ID, arg)
+		user, err := s.User(arg)
 		if err != nil {
-			switch {
-			case strings.Contains(err.Error(), "403"):
-				return fmt.Errorf("Unable to get member: <@%v>. Not enough permissions.", arg)
-			default:
-				return err
-			}
+			logrus.Warnln("blacklist():", err)
 		}
 
-		err = database.BanUser(guild.ID, member.User.ID)
+		err = database.BanUser(guild.ID, user.ID)
 		if err != nil {
-			return err
+			logrus.Warnln("blacklist():", err)
 		}
+
+		blacklisted = append(blacklisted, fmt.Sprintf("<@%v>", arg))
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully blacklisted following members: %v", args))
+	embed := utils.BaseEmbed(s)
+	embed.Title = "✅ Successfully blacklisted users"
+	embed.Description = fmt.Sprintf("List of blacklisted users:\n%v", blacklisted)
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }
 
@@ -298,32 +315,37 @@ func unblacklist(s *discordgo.Session, m *discordgo.MessageCreate, args []string
 	if !ok {
 		return fmt.Errorf("You don't have enough permissions to run this command.")
 	}
-
 	if len(args) == 0 {
 		return utils.ErrNotEnoughArguments
 	}
 
 	guild := database.GuildCache[m.GuildID]
+	unblacklisted := make([]string, 0)
 	for _, arg := range args {
 		arg = strings.Trim(arg, "<@!>")
 
-		member, err := s.GuildMember(guild.ID, arg)
-		if err != nil {
-			switch {
-			case strings.Contains(err.Error(), "403"):
-				return fmt.Errorf("Unable to get member: <@%v>. Not enough permissions.", arg)
-			default:
-				return err
+		exists := false
+		for _, user := range guild.BlacklistedUsers {
+			if arg == user {
+				exists = true
 			}
 		}
 
-		err = database.UnbanUser(member.GuildID, member.User.ID)
-		if err != nil {
-			return err
+		if exists {
+			err = database.UnbanUser(guild.ID, arg)
+			if err != nil {
+				return err
+			}
+
+			unblacklisted = append(unblacklisted, fmt.Sprintf("<@%v>", arg))
 		}
 	}
 
-	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully unblacklisted following members: %v", args))
+	embed := utils.BaseEmbed(s)
+	embed.Title = "✅ Successfully unblacklisted users"
+	embed.Description = fmt.Sprintf("List of unblacklisted users:\n%v", unblacklisted)
+
+	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }
 
@@ -332,27 +354,27 @@ func req(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 	if err != nil {
 		return err
 	}
-
 	if !ok {
 		return fmt.Errorf("You don't have enough permissions to run this command.")
 	}
-
 	if len(args) < 2 {
 		return utils.ErrNotEnoughArguments
 	}
-	channelID := ""
 
-	channels, err := s.GuildChannels(m.GuildID)
-	if err != nil {
-		return err
+	g := database.GuildCache[m.GuildID]
+
+	channelID := strings.Trim(args[0], "<#>")
+	exists := false
+	for _, ch := range g.ChannelSettings {
+		if ch.ID == channelID {
+			exists = true
+		}
 	}
 
-	if strings.HasPrefix(args[0], "<#") {
-		channelID = strings.Trim(args[0], "<#>")
-	}
-
-	if !utils.IsValidChannel(channelID, channels) {
-		return fmt.Errorf("Unable to get channel <#%v>. Please make sure Eugen has permissions to see the channel.")
+	if !exists {
+		if !utils.IsValidChannel(s, m.GuildID, channelID) {
+			return fmt.Errorf("Unable to get channel <#%v>. Please make sure Eugen has permissions to see the channel.", channelID)
+		}
 	}
 
 	if args[1] == "default" {
@@ -529,7 +551,7 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 			},
 			{
 				Name:  "Banned channels",
-				Value: banned,
+				Value: settings.BannedChannelsToString(),
 			},
 		},
 		Thumbnail: &discordgo.MessageEmbedThumbnail{

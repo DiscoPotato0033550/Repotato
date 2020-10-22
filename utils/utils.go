@@ -9,6 +9,7 @@ import (
 
 	"github.com/VTGare/Eugen/database"
 	"github.com/bwmarrin/discordgo"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -99,11 +100,15 @@ func MemberHasPermission(s *discordgo.Session, guildID string, userID string, pe
 	return false, nil
 }
 
-func IsValidChannel(id string, channels []*discordgo.Channel) bool {
-	for _, ch := range channels {
-		if ch.ID == id {
-			return true
-		}
+func IsValidChannel(s *discordgo.Session, guildID string, channelID string) bool {
+	ch, err := s.Channel(channelID)
+	if err != nil {
+		logrus.Warnln("IsValidChannel(): ", err)
+		return false
+	}
+
+	if ch.GuildID == guildID {
+		return true
 	}
 	return false
 }
