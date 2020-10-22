@@ -62,6 +62,10 @@ func init() {
 
 	banCommand := newCommand("ban", "Bans a channel").setExec(ban).setGuildOnly(true)
 	unbanCommand := newCommand("unban", "Unbans a channel").setExec(unban).setGuildOnly(true)
+
+	blacklistCommand := newCommand("blacklist", "Blacklists a user").setExec(blacklist).setGuildOnly(true)
+	unblacklistCommand := newCommand("unban", "Unblacklists a user").setExec(unblacklist).setGuildOnly(true)
+
 	reqCommand := newCommand("req", "Sets per channel star requirement").setExec(req).setGuildOnly(true).setAliases("requirement", "channelstars", "channelset")
 	reqCommand.Help.ExtendedHelp = []*discordgo.MessageEmbedField{
 		{
@@ -89,6 +93,8 @@ func init() {
 	basicGroup.addCommand(reqCommand)
 	basicGroup.addCommand(inviteCmd)
 	basicGroup.addCommand(setupCommand)
+	basicGroup.addCommand(blacklistCommand)
+	basicGroup.addCommand(unblacklistCommand)
 	CommandGroups["basic"] = basicGroup
 }
 
@@ -160,7 +166,7 @@ func help(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error
 }
 
 func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
 	if err != nil {
 		return err
 	}
@@ -204,7 +210,7 @@ func ban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 }
 
 func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
 	if err != nil {
 		return err
 	}
@@ -245,8 +251,84 @@ func unban(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 	return nil
 }
 
+func blacklist(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have enough permissions to run this command.")
+	}
+
+	if len(args) == 0 {
+		return utils.ErrNotEnoughArguments
+	}
+
+	guild := database.GuildCache[m.GuildID]
+	for _, arg := range args {
+		arg = strings.Trim(arg, "<@!>")
+
+		member, err := s.GuildMember(guild.ID, arg)
+		if err != nil {
+			switch {
+			case strings.Contains(err.Error(), "403"):
+				return fmt.Errorf("Unable to get member: <@%v>. Not enough permissions.", arg)
+			default:
+				return err
+			}
+		}
+
+		err = database.BanUser(guild.ID, member.User.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully blacklisted following members: %v", args))
+	return nil
+}
+
+func unblacklist(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return fmt.Errorf("You don't have enough permissions to run this command.")
+	}
+
+	if len(args) == 0 {
+		return utils.ErrNotEnoughArguments
+	}
+
+	guild := database.GuildCache[m.GuildID]
+	for _, arg := range args {
+		arg = strings.Trim(arg, "<@!>")
+
+		member, err := s.GuildMember(guild.ID, arg)
+		if err != nil {
+			switch {
+			case strings.Contains(err.Error(), "403"):
+				return fmt.Errorf("Unable to get member: <@%v>. Not enough permissions.", arg)
+			default:
+				return err
+			}
+		}
+
+		err = database.UnbanUser(member.GuildID, member.User.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Successfully unblacklisted following members: %v", args))
+	return nil
+}
+
 func req(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
 	if err != nil {
 		return err
 	}
@@ -333,6 +415,8 @@ func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 			passedSetting, err = strconv.ParseBool(newSetting)
 		case "selfstar":
 			passedSetting, err = strconv.ParseBool(newSetting)
+		case "ignorebots":
+			passedSetting, err = strconv.ParseBool(newSetting)
 		case "color":
 			if passedSetting, err = strconv.ParseInt(newSetting, 0, 32); err != nil {
 				if passedSetting, err = strconv.ParseInt("0x"+newSetting, 0, 32); err != nil {
@@ -373,6 +457,20 @@ func set(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error 
 			}
 
 			passedSetting = newSetting
+		case "nsfwstarboard":
+			if strings.HasPrefix(newSetting, "<#") {
+				newSetting = strings.TrimSuffix(strings.TrimPrefix(newSetting, "<#"), ">")
+			}
+			ch, err := s.Channel(newSetting)
+			if err != nil {
+				return err
+			}
+			if ch.GuildID != m.GuildID {
+				return errors.New("can't assign starboard to a channel from a foreign server")
+			}
+
+			passedSetting = newSetting
+
 		default:
 			return errors.New("unknown setting " + setting)
 		}
@@ -411,15 +509,23 @@ func showGuildSettings(s *discordgo.Session, m *discordgo.MessageCreate) {
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:  "Starboard",
-				Value: utils.FormatBool(settings.Enabled),
+				Value: fmt.Sprintf("**%v**\n**Starboard channel:** %v\n**NSFW starboard channel:** %v", utils.FormatBool(settings.Enabled), utils.FormatChannel(settings.StarboardChannel), utils.FormatChannel(settings.NSFWStarboardChannel)),
 			},
 			{
-				Name:  "Settings",
-				Value: fmt.Sprintf("Starboard: <#%v> | Emote: %v | Min stars: %v | Prefix: %v | Color: %v | Selfstar: %v", settings.StarboardChannel, settings.StarEmote, settings.MinimumStars, settings.Prefix, settings.EmbedColour, utils.FormatBool(settings.Selfstar)),
+				Name:  "General settings",
+				Value: fmt.Sprintf("**Emote:** %v | **Prefix:** %v | **Color:** %v", settings.StarEmote, settings.Prefix, settings.EmbedColour),
+			},
+			{
+				Name:  "Behaviour settings",
+				Value: fmt.Sprintf("**Selfstar:** %v | **Ignore bots:** %v | **Min stars:** %v", utils.FormatBool(settings.Selfstar), utils.FormatBool(settings.IgnoreBots), settings.MinimumStars),
 			},
 			{
 				Name:  "Unique star requirements",
 				Value: settings.ChannelSettingsToString(),
+			},
+			{
+				Name:  "Blacklisted users",
+				Value: settings.BlacklistedToString(),
 			},
 			{
 				Name:  "Banned channels",
@@ -469,7 +575,7 @@ func invite(s *discordgo.Session, m *discordgo.MessageCreate, args []string) err
 }
 
 func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, 8)
+	ok, err := utils.MemberHasPermission(s, m.GuildID, m.Author.ID, discordgo.PermissionAdministrator|discordgo.PermissionManageServer)
 	if err != nil {
 		return err
 	}

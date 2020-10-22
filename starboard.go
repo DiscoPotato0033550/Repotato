@@ -28,6 +28,7 @@ type StarboardEvent struct {
 	addEvent    *discordgo.MessageReactionAdd
 	removeEvent *discordgo.MessageReactionRemove
 	deleteEvent *discordgo.MessageDelete
+	nsfw        bool
 	selfstar    bool
 }
 
@@ -49,7 +50,7 @@ func newStarboardEventAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd)
 		return nil, err
 	}
 
-	return &StarboardEvent{guild: guild, message: message, channel: ch, session: s, addEvent: r, removeEvent: nil}, nil
+	return &StarboardEvent{guild: guild, message: message, channel: ch, session: s, addEvent: r, removeEvent: nil, nsfw: ch.NSFW}, nil
 }
 
 func newStarboardEventRemove(s *discordgo.Session, r *discordgo.MessageReactionRemove) (*StarboardEvent, error) {
@@ -64,7 +65,7 @@ func newStarboardEventRemove(s *discordgo.Session, r *discordgo.MessageReactionR
 		return nil, err
 	}
 
-	return &StarboardEvent{guild: guild, message: message, channel: ch, session: s, addEvent: nil, removeEvent: r}, nil
+	return &StarboardEvent{guild: guild, message: message, channel: ch, session: s, addEvent: nil, removeEvent: r, nsfw: ch.NSFW}, nil
 }
 
 func newStarboardEventDeleted(s *discordgo.Session, d *discordgo.MessageDelete) (*StarboardEvent, error) {
@@ -75,7 +76,7 @@ func newStarboardEventDeleted(s *discordgo.Session, d *discordgo.MessageDelete) 
 		return nil, err
 	}
 
-	return &StarboardEvent{guild: guild, message: &discordgo.Message{ID: d.ID}, channel: ch, session: s, addEvent: nil, removeEvent: nil, deleteEvent: d}, nil
+	return &StarboardEvent{guild: guild, message: &discordgo.Message{ID: d.ID}, channel: ch, session: s, addEvent: nil, removeEvent: nil, deleteEvent: d, nsfw: ch.NSFW}, nil
 }
 
 func (se *StarboardEvent) Run() error {
@@ -140,7 +141,6 @@ func (se *StarboardEvent) isSelfStar() (bool, error) {
 
 func (se *StarboardEvent) createStarboard() {
 	required := se.guild.StarsRequired(se.addEvent.ChannelID)
-
 	if react := se.findReact(); react != nil {
 		if se.selfstar && !se.guild.Selfstar {
 			react.Count--
@@ -155,7 +155,15 @@ func (se *StarboardEvent) createStarboard() {
 
 			if embed != nil {
 				logrus.Infof("Creating a new starboard. Guild: %v, channel: %v, message: %v", se.guild.Name, se.addEvent.ChannelID, se.addEvent.MessageID)
-				starboard, err := se.session.ChannelMessageSendComplex(se.guild.StarboardChannel, embed)
+
+				starboardChannel := ""
+				if se.nsfw && se.guild.NSFWStarboardChannel != "" {
+					starboardChannel = se.guild.NSFWStarboardChannel
+				} else {
+					starboardChannel = se.guild.StarboardChannel
+				}
+
+				starboard, err := se.session.ChannelMessageSendComplex(starboardChannel, embed)
 				if err != nil {
 					logrus.Warnln("Error sending a message: ", err)
 					se.session.ChannelMessageSend(se.message.ChannelID, fmt.Sprintf("Error creating a starboard message: %v", err))

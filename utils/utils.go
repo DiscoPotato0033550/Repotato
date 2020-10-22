@@ -116,6 +116,16 @@ func FormatBool(b bool) string {
 	return "disabled"
 }
 
+func FormatChannel(id string) string {
+	if id == "" {
+		return "-"
+	} else if strings.HasPrefix(id, "<#") {
+		return id
+	}
+
+	return fmt.Sprintf("<#%v>", id)
+}
+
 //GetEmoji returns a guild emoji API name from Discord state
 func GetEmoji(s *discordgo.Session, guildID, e string) (string, error) {
 	emojis, err := s.GuildEmojis(guildID)

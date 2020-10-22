@@ -124,6 +124,18 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		return
 	}
 
+	if msg.Author != nil {
+		if msg.Author.Bot && guild.IgnoreBots {
+			return
+		}
+
+		for _, user := range guild.BlacklistedUsers {
+			if msg.Author.ID == user {
+				return
+			}
+		}
+	}
+
 	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
 		se, err := newStarboardEventAdd(s, r)
 		if err != nil {

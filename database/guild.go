@@ -13,19 +13,22 @@ import (
 )
 
 type Guild struct {
-	Prefix           string             `json:"prefix" bson:"prefix"`
-	ID               string             `json:"guild_id" bson:"guild_id"`
-	Name             string             `json:"name" bson:"name"`
-	StarEmote        string             `json:"emote" bson:"emote"`
-	EmbedColour      int64              `json:"color" bson:"color"`
-	Enabled          bool               `json:"enabled" bson:"enabled"`
-	StarboardChannel string             `json:"starboard" bson:"starboard"`
-	Selfstar         bool               `json:"selfstar" bson:"selfstar"`
-	MinimumStars     int                `json:"stars" bson:"stars"`
-	ChannelSettings  []*ChannelSettings `json:"channel_settings" bson:"channel_settings"`
-	BannedChannels   []string           `json:"banned" bson:"banned"`
-	CreatedAt        time.Time          `json:"created_at" bson:"created_at"`
-	UpdatedAt        time.Time          `json:"updated_at" bson:"updated_at"`
+	Prefix               string             `json:"prefix" bson:"prefix"`
+	ID                   string             `json:"guild_id" bson:"guild_id"`
+	Name                 string             `json:"name" bson:"name"`
+	StarEmote            string             `json:"emote" bson:"emote"`
+	EmbedColour          int64              `json:"color" bson:"color"`
+	Enabled              bool               `json:"enabled" bson:"enabled"`
+	StarboardChannel     string             `json:"starboard" bson:"starboard"`
+	NSFWStarboardChannel string             `json:"nsfwstarboard" bson:"nsfwstarboard"`
+	Selfstar             bool               `json:"selfstar" bson:"selfstar"`
+	IgnoreBots           bool               `json:"ignorebots" bson:"ignorebots"`
+	MinimumStars         int                `json:"stars" bson:"stars"`
+	ChannelSettings      []*ChannelSettings `json:"channel_settings" bson:"channel_settings"`
+	BlacklistedUsers     []string           `json:"blacklisted_users" bson:"blacklisted_users"`
+	BannedChannels       []string           `json:"banned" bson:"banned"`
+	CreatedAt            time.Time          `json:"created_at" bson:"created_at"`
+	UpdatedAt            time.Time          `json:"updated_at" bson:"updated_at"`
 }
 
 type ChannelSettings struct {
@@ -58,6 +61,22 @@ func (g *Guild) ChannelSettingsToString() string {
 	return sb.String()
 }
 
+func (g *Guild) BlacklistedToString() string {
+	var sb strings.Builder
+	if len(g.BlacklistedUsers) == 0 {
+		return "none"
+	}
+
+	sb.WriteString(fmt.Sprintf("<@%v>", g.BlacklistedUsers[0]))
+	if len(g.ChannelSettings) > 1 {
+		for _, user := range g.BlacklistedUsers[1:] {
+			sb.WriteString(fmt.Sprintf("| <@%v>", user))
+		}
+	}
+
+	return sb.String()
+}
+
 func (g *Guild) IsBanned(channelID string) bool {
 	for _, id := range g.BannedChannels {
 		if id == channelID {
@@ -73,19 +92,22 @@ func (g *Guild) IsGuildEmoji() bool {
 
 func NewGuild(guildName, guildID string) *Guild {
 	return &Guild{
-		Prefix:           "e!",
-		ID:               guildID,
-		MinimumStars:     5,
-		Name:             guildName,
-		StarEmote:        "⭐",
-		Enabled:          true,
-		Selfstar:         true,
-		EmbedColour:      4431601,
-		StarboardChannel: "",
-		ChannelSettings:  make([]*ChannelSettings, 0),
-		BannedChannels:   make([]string, 0),
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		Prefix:               "e!",
+		ID:                   guildID,
+		MinimumStars:         5,
+		Name:                 guildName,
+		StarEmote:            "⭐",
+		Enabled:              true,
+		Selfstar:             true,
+		IgnoreBots:           false,
+		EmbedColour:          4431601,
+		StarboardChannel:     "",
+		NSFWStarboardChannel: "",
+		BlacklistedUsers:     make([]string, 0),
+		ChannelSettings:      make([]*ChannelSettings, 0),
+		BannedChannels:       make([]string, 0),
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
 	}
 }
 
@@ -184,6 +206,54 @@ func UnbanChannel(guildID, channelID string) error {
 		},
 		"$pull": bson.M{
 			"banned": channelID,
+		},
+	}, options.FindOneAndUpdate().SetReturnDocument(options.After))
+
+	guild := &Guild{}
+	err := res.Decode(guild)
+	if err != nil {
+		return err
+	}
+
+	GuildCache[guildID] = guild
+	return nil
+}
+
+func BanUser(guildID, userID string) error {
+	col := DB.Collection("guilds")
+
+	res := col.FindOneAndUpdate(context.Background(), bson.M{
+		"guild_id": guildID,
+	}, bson.M{
+		"$set": bson.M{
+			"updated_at": time.Now(),
+		},
+		"$addToSet": bson.M{
+			"blacklisted_users": userID,
+		},
+	}, options.FindOneAndUpdate().SetReturnDocument(options.After))
+
+	guild := &Guild{}
+	err := res.Decode(guild)
+	if err != nil {
+		return err
+	}
+
+	GuildCache[guildID] = guild
+	return nil
+}
+
+func UnbanUser(guildID, userID string) error {
+	col := DB.Collection("guilds")
+
+	res := col.FindOneAndUpdate(context.Background(), bson.M{
+		"guild_id": guildID,
+	}, bson.M{
+		"$set": bson.M{
+			"updated_at": time.Now(),
+		},
+		"$pull": bson.M{
+			"blacklisted_users": userID,
 		},
 	}, options.FindOneAndUpdate().SetReturnDocument(options.After))
 
