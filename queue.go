@@ -24,7 +24,7 @@ func (q Queue) Push(pair database.MessagePair, event *StarboardEvent) {
 			for e := range q[pair] {
 				err := e.Run()
 				if err != nil {
-					logrus.Warnln(err)
+					logrus.Warnln("e.Run(): ", err)
 				}
 			}
 		}()

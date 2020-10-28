@@ -120,7 +120,11 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	guild, ok := database.GuildCache[r.GuildID]
 	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
 	if err != nil {
-		logrus.Warnln(err)
+		logrus.Warnln("s.ChannelMessage(): ", err)
+		return
+	}
+
+	if !guild.Enabled || guild.StarboardChannel == "" {
 		return
 	}
 
@@ -136,8 +140,17 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		}
 	}
 
-	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
+	if guild.IsBanned(r.ChannelID) {
+		return
+	}
+
+	if ok && msg.Author.ID != s.State.User.ID {
 		se, err := newStarboardEventAdd(s, r)
+
+		if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+			return
+		}
+
 		if err != nil {
 			log.Warnln(err)
 			return
@@ -151,7 +164,7 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 	guild, ok := database.GuildCache[r.GuildID]
 	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
 	if err != nil {
-		logrus.Warnln(err)
+		logrus.Warnln("s.ChannelMessage(): ", err)
 		return
 	}
 
@@ -170,7 +183,7 @@ func allReactsRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemoveAl
 	guild, ok := database.GuildCache[r.GuildID]
 	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
 	if err != nil {
-		logrus.Warnln(err)
+		logrus.Warnln("s.ChannelMessage(): ", err)
 		return
 	}
 
