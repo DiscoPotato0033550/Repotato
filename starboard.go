@@ -506,7 +506,7 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 
 	g, err := se.session.Guild(se.addEvent.GuildID)
 	if err == nil {
-		if g.PremiumTier != discordgo.PremiumTierNone {
+		if g.PremiumTier == discordgo.PremiumTier2 || g.PremiumTier == discordgo.PremiumTier3 {
 			limit = int64(52428800)
 		}
 	} else {
