@@ -147,7 +147,7 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	if ok && msg.Author.ID != s.State.User.ID {
 		se, err := newStarboardEventAdd(s, r)
 
-		if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+		if se.React != nil && se.React.Count < guild.StarsRequired(se.message.ChannelID) {
 			return
 		}
 
