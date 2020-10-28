@@ -166,7 +166,7 @@ func BaseEmbed(s *discordgo.Session) *discordgo.MessageEmbed {
 func CreatePrompt(s *discordgo.Session, m *discordgo.MessageCreate, embed *discordgo.MessageEmbed) string {
 	prompt, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	if err != nil {
-		log.Warnln(err)
+		log.Warnln("CreatePrompt() -> s.ChannelMessageSendEmbed(): ", err)
 		return ""
 	}
 
