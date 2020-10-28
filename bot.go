@@ -117,46 +117,49 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
-	guild, ok := database.GuildCache[r.GuildID]
-	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-	if err != nil {
-		logrus.Warnln("s.ChannelMessage(): ", err)
-		return
-	}
-
-	if !guild.Enabled || guild.StarboardChannel == "" {
-		return
-	}
-
-	if msg.Author != nil {
-		if msg.Author.Bot && guild.IgnoreBots {
+	if guild, ok := database.GuildCache[r.GuildID]; ok {
+		msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+		if err != nil {
+			logrus.Warnln("s.ChannelMessage(): ", err)
 			return
 		}
 
-		for _, user := range guild.BlacklistedUsers {
-			if msg.Author.ID == user {
+		if !guild.Enabled || guild.StarboardChannel == "" {
+			return
+		}
+
+		if msg.Author != nil {
+			if msg.Author.Bot && guild.IgnoreBots {
 				return
 			}
+
+			for _, user := range guild.BlacklistedUsers {
+				if msg.Author.ID == user {
+					return
+				}
+			}
 		}
-	}
 
-	if guild.IsBanned(r.ChannelID) {
-		return
-	}
-
-	if ok && msg.Author.ID != s.State.User.ID {
-		se, err := newStarboardEventAdd(s, r)
-
-		if se.React != nil && se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+		if guild.IsBanned(r.ChannelID) {
 			return
 		}
 
-		if err != nil {
-			log.Warnln(err)
-			return
+		if msg.Author.ID != s.State.User.ID {
+			se, err := newStarboardEventAdd(s, r)
+
+			if se.React != nil {
+				if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+					return
+				}
+			}
+
+			if err != nil {
+				log.Warnln(err)
+				return
+			}
+			p := database.NewPair(r.ChannelID, r.MessageID)
+			starboardQueue.Push(p, se)
 		}
-		p := database.NewPair(r.ChannelID, r.MessageID)
-		starboardQueue.Push(p, se)
 	}
 }
 
