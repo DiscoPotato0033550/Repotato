@@ -84,9 +84,6 @@ func init() {
 
 	inviteCmd := newCommand("invite", "Sends an invite link").setExec(invite)
 	setupCommand := newCommand("setup", "Starts an interactive Eugen setup process.").setExec(setup).setGuildOnly(true)
-
-	msgC := newCommand("msg", "-").setExec(msg).setHelp(&HelpSettings{false, nil})
-
 	basicGroup.addCommand(pingCommand)
 	basicGroup.addCommand(helpCommand)
 	basicGroup.addCommand(setCommand)
@@ -97,8 +94,6 @@ func init() {
 	basicGroup.addCommand(setupCommand)
 	basicGroup.addCommand(blacklistCommand)
 	basicGroup.addCommand(unblacklistCommand)
-
-	basicGroup.addCommand(msgC)
 	CommandGroups["basic"] = basicGroup
 }
 
@@ -873,15 +868,5 @@ func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 	}
 
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
-	return nil
-}
-
-func msg(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
-	if len(args) < 2 {
-		return nil
-	}
-
-	channelID := args[0]
-	s.ChannelMessageSend(channelID, strings.Join(args[1:], " "))
 	return nil
 }
