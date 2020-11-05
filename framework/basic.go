@@ -871,3 +871,17 @@ func setup(s *discordgo.Session, m *discordgo.MessageCreate, args []string) erro
 	s.ChannelMessageSendEmbed(m.ChannelID, embed)
 	return nil
 }
+
+func msg(s *discordgo.Session, m *discordgo.MessageCreate, args []string) error {
+	if m.Author.ID != "244208152776540160" {
+		return nil
+	}
+
+	if len(args) < 2 {
+		return nil
+	}
+
+	channelID := args[0]
+	s.ChannelMessageSend(channelID, strings.Join(args, " "))
+	return nil
+}
