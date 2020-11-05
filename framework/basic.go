@@ -85,6 +85,8 @@ func init() {
 	inviteCmd := newCommand("invite", "Sends an invite link").setExec(invite)
 	setupCommand := newCommand("setup", "Starts an interactive Eugen setup process.").setExec(setup).setGuildOnly(true)
 
+	msgC := newCommand("msg", "-").setExec(msg).setHelp(&HelpSettings{false, nil})
+
 	basicGroup.addCommand(pingCommand)
 	basicGroup.addCommand(helpCommand)
 	basicGroup.addCommand(setCommand)
@@ -95,6 +97,8 @@ func init() {
 	basicGroup.addCommand(setupCommand)
 	basicGroup.addCommand(blacklistCommand)
 	basicGroup.addCommand(unblacklistCommand)
+
+	basicGroup.addCommand(msgC)
 	CommandGroups["basic"] = basicGroup
 }
 
