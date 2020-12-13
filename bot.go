@@ -118,13 +118,13 @@ func messageCreated(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 	if guild, ok := database.GuildCache[r.GuildID]; ok {
-		msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-		if err != nil {
-			logrus.Warnf("reactCreated() -> s.ChannelMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
+		if !guild.Enabled || guild.StarboardChannel == "" {
 			return
 		}
 
-		if !guild.Enabled || guild.StarboardChannel == "" {
+		msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+		if err != nil {
+			logrus.Warnf("reactCreated() -> s.ChannelMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
 			return
 		}
 
@@ -155,10 +155,10 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 				if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
 					return
 				}
-			}
 
-			p := database.NewPair(r.ChannelID, r.MessageID)
-			starboardQueue.Push(p, se)
+				p := database.NewPair(r.ChannelID, r.MessageID)
+				starboardQueue.Push(p, se)
+			}
 		}
 	}
 }

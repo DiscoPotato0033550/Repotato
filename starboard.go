@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,9 +35,10 @@ type StarboardEvent struct {
 }
 
 type StarboardFile struct {
-	Name string
-	URL  string
-	Resp *http.Response
+	Name      string
+	URL       string
+	Thumbnail *os.File
+	Resp      *http.Response
 }
 
 func newStarboardEventAdd(s *discordgo.Session, r *discordgo.MessageReactionAdd) (*StarboardEvent, error) {
@@ -495,7 +497,7 @@ func (se *StarboardEvent) editStarboard(msg *discordgo.Message, react *discordgo
 
 func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 	var (
-		file  = &StarboardFile{"", "", nil}
+		file  = &StarboardFile{"", "", nil, nil}
 		limit = int64(8388608)
 	)
 
@@ -513,7 +515,7 @@ func (se *StarboardEvent) downloadFile(uri string) (*StarboardFile, error) {
 		logrus.Warnf("downloadFile(): %v", err)
 	}
 
-	//if Content-Length is larger than 8MB | 50MB | 100MB depending on boost level
+	//if Content-Length is larger than 8MB | 50MB depending on boost level
 	if head.ContentLength >= limit {
 		file.URL = uri
 		return file, nil
