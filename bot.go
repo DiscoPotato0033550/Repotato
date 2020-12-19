@@ -129,6 +129,10 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 		}
 
 		if msg.Author != nil {
+			if msg.Author.ID == s.State.User.ID {
+				return
+			}
+
 			if msg.Author.Bot && guild.IgnoreBots {
 				return
 			}
@@ -144,21 +148,19 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 			return
 		}
 
-		if msg.Author.ID != s.State.User.ID {
-			se, err := newStarboardEventAdd(s, r)
+		if react := FindReact(msg, guild.StarEmote); react != nil {
+			se, err := newStarboardEventAdd(s, r, msg, react)
 			if err != nil {
 				log.Warnln("newStarboardEventAdd(): ", err)
 				return
 			}
 
-			if se.React != nil {
-				if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
-					return
-				}
-
-				p := database.NewPair(r.ChannelID, r.MessageID)
-				starboardQueue.Push(p, se)
+			if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+				return
 			}
+
+			p := database.NewPair(r.ChannelID, r.MessageID)
+			starboardQueue.Push(p, se)
 		}
 	}
 }
@@ -172,13 +174,16 @@ func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
 	}
 
 	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
-		se, err := newStarboardEventRemove(s, r)
-		if err != nil {
-			log.Warnln("newStarboardEventRemove():", err)
-			return
+		apiName := fmt.Sprintf("<:%s>", r.MessageReaction.Emoji.APIName())
+		if strings.EqualFold(guild.StarEmote, apiName) {
+			se, err := newStarboardEventRemove(s, r, msg)
+			if err != nil {
+				log.Warnln("newStarboardEventRemove():", err)
+				return
+			}
+			p := database.NewPair(r.ChannelID, r.MessageID)
+			starboardQueue.Push(p, se)
 		}
-		p := database.NewPair(r.ChannelID, r.MessageID)
-		starboardQueue.Push(p, se)
 	}
 }
 
