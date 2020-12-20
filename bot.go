@@ -122,60 +122,84 @@ func reactCreated(s *discordgo.Session, r *discordgo.MessageReactionAdd) {
 			return
 		}
 
-		msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-		if err != nil {
-			logrus.Warnf("reactCreated() -> s.ChannelMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
-			return
-		}
-
-		if msg.Author != nil {
-			if msg.Author.ID == s.State.User.ID {
+		if guild.ValidateEmoji(r.MessageReaction.Emoji) {
+			if guild.IsBanned(r.ChannelID) {
 				return
 			}
 
-			if msg.Author.Bot && guild.IgnoreBots {
+			msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+			if err != nil {
+				logrus.Warnf("reactCreated() -> getMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
 				return
 			}
 
-			for _, user := range guild.BlacklistedUsers {
-				if msg.Author.ID == user {
+			if msg.Author != nil {
+				if msg.Author.ID == s.State.User.ID {
 					return
 				}
-			}
-		}
 
-		if guild.IsBanned(r.ChannelID) {
-			return
-		}
+				if msg.Author.Bot && guild.IgnoreBots {
+					return
+				}
 
-		if react := FindReact(msg, guild.StarEmote); react != nil {
-			se, err := newStarboardEventAdd(s, r, msg, react)
-			if err != nil {
-				log.Warnln("newStarboardEventAdd(): ", err)
-				return
+				for _, user := range guild.BlacklistedUsers {
+					if msg.Author.ID == user {
+						return
+					}
+				}
 			}
 
-			if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
-				return
-			}
+			if react := FindReact(msg, guild.StarEmote); react != nil {
+				se, err := newStarboardEventAdd(s, r, msg, react)
+				if err != nil {
+					log.Warnln("newStarboardEventAdd(): ", err)
+					return
+				}
 
-			p := database.NewPair(r.ChannelID, r.MessageID)
-			starboardQueue.Push(p, se)
+				if se.React.Count < guild.StarsRequired(se.message.ChannelID) {
+					return
+				}
+
+				p := database.NewPair(r.ChannelID, r.MessageID)
+				starboardQueue.Push(p, se)
+			}
 		}
 	}
 }
 
 func reactRemoved(s *discordgo.Session, r *discordgo.MessageReactionRemove) {
-	guild, ok := database.GuildCache[r.GuildID]
-	msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
-	if err != nil {
-		logrus.Warnf("reactRemoved() -> s.ChannelMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
-		return
-	}
+	if guild, ok := database.GuildCache[r.GuildID]; ok {
+		if !guild.Enabled || guild.StarboardChannel == "" {
+			return
+		}
 
-	if ok && guild.Enabled && guild.StarboardChannel != "" && !guild.IsBanned(r.ChannelID) && msg.Author.ID != s.State.User.ID {
-		apiName := fmt.Sprintf("<:%s>", r.MessageReaction.Emoji.APIName())
-		if strings.EqualFold(guild.StarEmote, apiName) {
+		if guild.ValidateEmoji(r.MessageReaction.Emoji) {
+			if guild.IsBanned(r.ChannelID) {
+				return
+			}
+
+			msg, err := s.ChannelMessage(r.ChannelID, r.MessageID)
+			if err != nil {
+				logrus.Warnf("reactRemoved() -> getMessage(): %v. Channel ID: %v, Message ID: %v", err, r.ChannelID, r.MessageID)
+				return
+			}
+
+			if msg.Author != nil {
+				if msg.Author.ID == s.State.User.ID {
+					return
+				}
+
+				if msg.Author.Bot && guild.IgnoreBots {
+					return
+				}
+
+				for _, user := range guild.BlacklistedUsers {
+					if msg.Author.ID == user {
+						return
+					}
+				}
+			}
+
 			se, err := newStarboardEventRemove(s, r, msg)
 			if err != nil {
 				log.Warnln("newStarboardEventRemove():", err)

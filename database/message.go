@@ -35,6 +35,10 @@ type MessagePair struct {
 	MessageID string `bson:"message_id" json:"message_id"`
 }
 
+func (p *MessagePair) String() string {
+	return p.ChannelID + " " + p.MessageID
+}
+
 func NewMessage(original, starboard *MessagePair, guildID string) *Message {
 	return &Message{
 		GuildID:   guildID,

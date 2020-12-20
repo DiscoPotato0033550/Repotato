@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bwmarrin/discordgo"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -115,6 +116,11 @@ func (g *Guild) IsBanned(channelID string) bool {
 		}
 	}
 	return false
+}
+
+func (g *Guild) ValidateEmoji(emoji discordgo.Emoji) bool {
+	apiName := fmt.Sprintf("<:%s>", emoji.APIName())
+	return strings.EqualFold(g.StarEmote, apiName)
 }
 
 func (g *Guild) IsGuildEmoji() bool {
