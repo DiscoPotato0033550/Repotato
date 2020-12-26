@@ -119,8 +119,7 @@ func (g *Guild) IsBanned(channelID string) bool {
 }
 
 func (g *Guild) ValidateEmoji(emoji discordgo.Emoji) bool {
-	apiName := fmt.Sprintf("<:%s>", emoji.APIName())
-	return strings.EqualFold(g.StarEmote, apiName)
+	return strings.EqualFold(g.StarEmote, emoji.MessageFormat())
 }
 
 func (g *Guild) IsGuildEmoji() bool {

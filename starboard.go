@@ -416,7 +416,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *dis
 			if strings.EqualFold(emb.Footer.Text, "twitter") {
 				if twitter := utils.TwitterRegex.FindString(se.message.Content); twitter != "" {
 					embed.Description = strings.Replace(embed.Description, twitter, "", 1)
-					embed.Description += fmt.Sprintf("\n```\n%v\n```", emb.Description)
+					embed.Description += fmt.Sprintf("\n[%v](%v)\n```\n%v\n```", emb.Author.Name, emb.Author.URL, emb.Description)
 					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Twitter", Value: fmt.Sprintf("[Click here desu~](%v)", twitter), Inline: true})
 				}
 				embed.Image = emb.Image
