@@ -375,7 +375,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *dis
 		}
 
 		for ind, a := range rest {
-			eb.AddField(fmt.Sprintf("Attachment %v", ind+2), a.URL, true)
+			eb.AddField(fmt.Sprintf("Attachment %v", ind+2), fmt.Sprintf("[Click here desu~](%v)", a.URL), true)
 		}
 	case len(URLs) != 0:
 		switch URLs[0].Type {
