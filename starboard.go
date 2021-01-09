@@ -3,21 +3,18 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/VTGare/Eugen/database"
 	"github.com/VTGare/Eugen/services"
 	"github.com/VTGare/Eugen/utils"
+	"github.com/VTGare/embeds"
 	"github.com/bwmarrin/discordgo"
 	"github.com/sirupsen/logrus"
-)
-
-var (
-	imgurRegex = regexp.MustCompile(`(?i)https?:\/\/imgur\.com\/(\w+)(?:\/(\w+))?`)
+	"mvdan.cc/xurls/v2"
 )
 
 type StarboardEvent struct {
@@ -288,45 +285,111 @@ func (se *StarboardEvent) deleteStarboard() error {
 
 func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *discordgo.Channel) (*discordgo.MessageSend, *http.Response, error) {
 	var (
-		resp *http.Response
+		eb         = embeds.NewBuilder()
+		resp       *http.Response
+		t, _       = se.message.Timestamp.Parse()
+		messageURL = fmt.Sprintf("https://discord.com/channels/%v/%v/%v", se.addEvent.GuildID, se.addEvent.ChannelID, se.message.ID)
+		msg        = &discordgo.MessageSend{}
+		content    = se.message.Content
+		rx         = xurls.Strict()
+		URLs       = make([]*EugenURL, 0)
 	)
 
-	t, _ := se.message.Timestamp.Parse()
-	messageURL := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", se.addEvent.GuildID, se.addEvent.ChannelID, se.message.ID)
+	for _, uri := range rx.FindAllString(content, -1) {
+		parsed, err := url.Parse(uri)
+		if err != nil {
+			continue
+		}
 
-	msg := &discordgo.MessageSend{}
-	footer := &discordgo.MessageEmbedFooter{}
+		eu := &EugenURL{
+			URL: parsed,
+		}
+
+		switch {
+		case strings.HasSuffix(parsed.Path, "jpg") || strings.HasSuffix(parsed.Path, "png") || strings.HasSuffix(parsed.Path, "jpeg") || strings.HasSuffix(parsed.Path, "webp"):
+			eu.Type = ImageURL
+		case strings.HasSuffix(parsed.Path, "mp4") || strings.HasSuffix(parsed.Path, "webm") || strings.HasSuffix(parsed.Path, "mp4") || strings.HasSuffix(parsed.Path, "mov") || strings.HasSuffix(parsed.Path, "gifv"):
+			eu.Type = VideoURL
+		case strings.Contains(parsed.Host, "imgur"):
+			eu.Type = ImgurURL
+		case strings.Contains(parsed.String(), "tenor.com/view"):
+			eu.Type = TenorURL
+		default:
+			continue
+		}
+
+		URLs = append(URLs, eu)
+	}
+
+	eb.Author(fmt.Sprintf("%v in #%v", se.message.Author.String(), ch.Name), messageURL, se.message.Author.AvatarURL(""))
+	eb.Color(int(se.guild.EmbedColour))
+	eb.Timestamp(t)
+	eb.AddField("Original message", fmt.Sprintf("[Click here desu~](%v)", messageURL), true)
 	if se.guild.IsGuildEmoji() {
-		footer.IconURL = emojiURL(react.Emoji)
-		footer.Text = fmt.Sprintf("%v", react.Count)
+		text := fmt.Sprintf("%v", react.Count)
+		if se.selfstar && se.guild.Selfstar {
+			text += " | self-starred"
+		}
+
+		eb.Footer(text, emojiURL(react.Emoji))
 	} else {
-		footer.Text = fmt.Sprintf("%v %v", "⭐", react.Count)
+		text := fmt.Sprintf("%v %v", "⭐", react.Count)
+		if se.selfstar && se.guild.Selfstar {
+			text += " | self-starred"
+		}
+
+		eb.Footer(text, "")
 	}
 
-	if se.selfstar && se.guild.Selfstar {
-		footer.Text += " | self-starred"
+	if ref := se.message.MessageReference; ref != nil {
+		uri := fmt.Sprintf("https://discord.com/channels/%v/%v/%v", ref.GuildID, ref.ChannelID, ref.MessageID)
+		eb.AddField("Reply to", fmt.Sprintf("[Click here desu~](%v)", uri), true)
 	}
 
-	embed := &discordgo.MessageEmbed{
-		Author: &discordgo.MessageEmbedAuthor{
-			Name:    fmt.Sprintf("%v in #%v", se.message.Author.String(), ch.Name),
-			URL:     messageURL,
-			IconURL: se.message.Author.AvatarURL(""),
-		},
-		Color:       int(se.guild.EmbedColour),
-		Description: se.message.Content,
-		Fields:      []*discordgo.MessageEmbedField{{Name: "Original message", Value: fmt.Sprintf("[Click here desu~](%v)", messageURL), Inline: true}},
-		Timestamp:   t.Format(time.RFC3339),
-		Footer:      footer,
-	}
+	switch {
+	case len(se.message.Attachments) != 0:
+		var (
+			first = se.message.Attachments[0]
+			rest  = se.message.Attachments[1:]
+		)
 
-	if len(se.message.Attachments) != 0 {
-		if utils.ImageURLRegex.MatchString(se.message.Attachments[0].URL) {
-			embed.Image = &discordgo.MessageEmbedImage{
-				URL: se.message.Attachments[0].URL,
-			}
+		if utils.ImageURLRegex.MatchString(first.URL) {
+			eb.Image(first.URL)
 		} else {
-			video, err := se.downloadFile(se.message.Attachments[0].URL)
+			file, err := se.downloadFile(first.URL)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if file.Resp != nil {
+				resp = file.Resp
+				msg.Files = []*discordgo.File{
+					{
+						Name:   file.Name,
+						Reader: file.Resp.Body,
+					},
+				}
+			} else {
+				eb.AddField("Attachment", fmt.Sprintf("[Click here desu~](%v)", first.URL), true)
+			}
+		}
+
+		for ind, a := range rest {
+			eb.AddField(fmt.Sprintf("Attachment %v", ind+2), a.URL, true)
+		}
+	case len(URLs) != 0:
+		switch URLs[0].Type {
+		case ImageURL:
+			str := URLs[0].URL.String()
+			eb.Image(str)
+			content = strings.Replace(content, str, "", 1)
+		case VideoURL:
+			uri := URLs[0].URL.String()
+			if strings.HasSuffix(uri, "gifv") {
+				uri = strings.Replace(uri, "gifv", "mp4", 1)
+			}
+
+			video, err := se.downloadFile(uri)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -340,106 +403,84 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *dis
 					},
 				}
 			} else {
-				embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", se.message.Attachments[0].URL), Inline: true})
+				eb.AddField("Attachment", fmt.Sprintf("[Click here desu~](%v)", uri), true)
 			}
-		}
-	} else if str := utils.VideoURLRegex.FindString(embed.Description); str != "" {
-		uri := str
-		if strings.HasSuffix(uri, "gifv") {
-			uri = strings.Replace(uri, "gifv", "mp4", 1)
-		}
-
-		video, err := se.downloadFile(uri)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if video.Resp != nil {
-			resp = video.Resp
-			msg.Files = []*discordgo.File{
-				{
-					Name:   video.Name,
-					Reader: video.Resp.Body,
-				},
+			content = strings.Replace(content, uri, "", 1)
+		case TenorURL:
+			tenor := URLs[0].URL.String()
+			res, err := services.Tenor(tenor)
+			if err != nil {
+				logrus.Warn(err)
+			} else if len(res.Media) != 0 {
+				content = strings.ReplaceAll(content, tenor, "")
+				eb.Image(res.Media[0].MediumGIF.URL)
 			}
-		} else {
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Attachment", Value: fmt.Sprintf("[Click here desu~](%v)", uri), Inline: true})
-		}
-		embed.Description = strings.Replace(embed.Description, str, "", 1)
-	} else if str := utils.ImageURLRegex.FindString(embed.Description); str != "" {
-		embed.Image = &discordgo.MessageEmbedImage{
-			URL: str,
-		}
-		embed.Description = strings.Replace(embed.Description, str, "", 1)
-	} else if tenor := findTenor(embed.Description); tenor != "" {
-		res, err := services.Tenor(tenor)
-		if err != nil {
-			logrus.Warn(err)
-		} else if len(res.Media) != 0 {
-			embed.Description = strings.ReplaceAll(embed.Description, tenor, "")
-			media := res.Media[0]
-			embed.Image = &discordgo.MessageEmbedImage{
-				URL: media.MediumGIF.URL,
-			}
-		}
-	} else if imgur := imgurRegex.FindStringSubmatch(embed.Description); imgur != nil {
-		if len(se.message.Embeds) != 0 {
-			emb := se.message.Embeds[0]
-			if emb.Video != nil {
-				file, err := se.downloadFile(emb.Video.URL)
-				if err != nil {
-					logrus.Warnln("se.dowloadFile():", err)
-				}
+		case ImgurURL:
+			if len(se.message.Embeds) != 0 {
+				emb := se.message.Embeds[0]
+				if emb.Video != nil {
+					file, err := se.downloadFile(emb.Video.URL)
+					if err != nil {
+						logrus.Warnln("se.dowloadFile():", err)
+					}
 
-				if file.Resp != nil {
-					resp = file.Resp
-					msg.Files = []*discordgo.File{
-						{
-							Name:   file.Name,
-							Reader: file.Resp.Body,
-						},
+					if file.Resp != nil {
+						resp = file.Resp
+						msg.Files = []*discordgo.File{
+							{
+								Name:   file.Name,
+								Reader: file.Resp.Body,
+							},
+						}
+					} else if emb.Thumbnail != nil {
+						eb.Image(emb.Thumbnail.ProxyURL)
 					}
 				} else if emb.Thumbnail != nil {
-					embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.ProxyURL}
+					eb.Image(emb.Thumbnail.ProxyURL)
 				}
-			} else if emb.Thumbnail != nil {
-				embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.ProxyURL}
+			} else {
+				eb.Image(fmt.Sprintf("https://i.imgur.com/%v.png", URLs[0].URL.Path))
 			}
-		} else {
-			embed.Image = &discordgo.MessageEmbedImage{URL: fmt.Sprintf("https://i.imgur.com/%v.png", imgur[1])}
-		}
 
-		embed.Description = strings.Replace(embed.Description, imgur[0], "", 1)
-	} else if len(se.message.Embeds) != 0 {
+			content = strings.Replace(content, URLs[0].URL.String(), "", 1)
+		}
+	case len(se.message.Embeds) != 0:
 		emb := se.message.Embeds[0]
-		if emb.Footer != nil {
-			if strings.EqualFold(emb.Footer.Text, "twitter") {
-				if twitter := utils.TwitterRegex.FindString(se.message.Content); twitter != "" {
-					embed.Description = strings.Replace(embed.Description, twitter, "", 1)
-					embed.Description += fmt.Sprintf("\n[%v](%v)\n```\n%v\n```", emb.Author.Name, emb.Author.URL, emb.Description)
-					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Twitter", Value: fmt.Sprintf("[Click here desu~](%v)", twitter), Inline: true})
-				}
-				embed.Image = emb.Image
-				if emb.Video != nil {
-					embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "Video", Value: fmt.Sprintf("[Click here desu~](%v)", emb.Video.URL), Inline: true})
-				}
+		if emb.Footer != nil && strings.EqualFold(emb.Footer.Text, "twitter") {
+			if twitter := utils.TwitterRegex.FindString(se.message.Content); twitter != "" {
+				content = strings.Replace(content, twitter, "", 1)
+				content += fmt.Sprintf("\n[%v](%v)\n```\n%v\n```", emb.Author.Name, emb.Author.URL, emb.Description)
+				eb.AddField("Twitter", fmt.Sprintf("[Click here desu~](%v)", twitter), true)
+			}
+
+			eb.Image(emb.Image.URL)
+			if emb.Video != nil {
+				eb.AddField("Twitter video", fmt.Sprintf("[Click here desu~](%v)", emb.Video.URL), true)
 			}
 		} else if emb.Provider != nil && strings.EqualFold(emb.Provider.Name, "youtube") {
-			embed.Image = &discordgo.MessageEmbedImage{URL: emb.Thumbnail.URL}
-			yt := utils.YoutubeRegex.FindString(embed.Description)
-			embed.Description = strings.ReplaceAll(embed.Description, yt, "")
-			embed.Description += "\n```" + emb.Title + "```"
-			embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{Name: "YouTube", Value: fmt.Sprintf("[Click here desu~](%v)", emb.URL), Inline: true})
-		} else if img := se.message.Embeds[0].Image; img != nil {
-			if img.URL != "" {
-				embed.Image = &discordgo.MessageEmbedImage{
-					URL: se.message.Embeds[0].Image.URL,
+			eb.Image(emb.Thumbnail.URL)
+			yt := utils.YoutubeRegex.FindString(content)
+			content = strings.Replace(content, yt, "", 1)
+
+			content += "\n```" + emb.Title + "```"
+			eb.AddField("YouTube", fmt.Sprintf("[Click here desu~](%v)", emb.URL), true)
+		} else {
+			if emb.Description != "" {
+				content += "\n"
+				if emb.Title != "" {
+					content += "**%v**\n"
 				}
+				content += fmt.Sprintf("%v", emb.Description)
+			}
+
+			if emb.Image != nil && emb.Image.URL != "" {
+				eb.Image(emb.Image.URL)
 			}
 		}
 	}
 
-	msg.Embed = embed
+	eb.Description(content)
+	msg.Embed = eb.Finalize()
 	return msg, resp, nil
 }
 
@@ -525,19 +566,4 @@ func emojiURL(emoji *discordgo.Emoji) string {
 	}
 
 	return url
-}
-
-func findTenor(content string) string {
-	tenor := ""
-	if ind := strings.Index(content, "https://tenor.com/view/"); ind != -1 {
-		if ws := strings.IndexAny(content[ind:], " \n"); ws == -1 {
-			tenor = content[ind:]
-		} else {
-			tenor = content[ind : ws+ind]
-		}
-
-		logrus.Info(tenor)
-	}
-
-	return tenor
 }
