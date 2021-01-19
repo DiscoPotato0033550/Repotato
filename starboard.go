@@ -453,7 +453,10 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *dis
 				eb.AddField("Twitter", fmt.Sprintf("[Click here desu~](%v)", twitter), true)
 			}
 
-			eb.Image(emb.Image.URL)
+			if emb.Image != nil {
+				eb.Image(emb.Image.URL)
+			}
+
 			if emb.Video != nil {
 				eb.AddField("Twitter video", fmt.Sprintf("[Click here desu~](%v)", emb.Video.URL), true)
 			}
