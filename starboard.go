@@ -471,7 +471,7 @@ func (se *StarboardEvent) createEmbed(react *discordgo.MessageReactions, ch *dis
 			if emb.Description != "" {
 				content += "\n"
 				if emb.Title != "" {
-					content += "**%v**\n"
+					content += fmt.Sprintf("**%v**\n", emb.Title)
 				}
 				content += fmt.Sprintf("%v", emb.Description)
 			}
